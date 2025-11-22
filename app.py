@@ -36,7 +36,7 @@ DÉROULEMENT SÉQUENCÉ :
 """
 
 model = genai.GenerativeModel(
-   model_name='gemini-1.5-flash-latest',
+   model_name='gemini-1.5-flash-002',
     system_instruction=SYSTEM_PROMPT
 )
 
