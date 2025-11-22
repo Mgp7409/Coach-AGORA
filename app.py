@@ -5,7 +5,7 @@ from datetime import datetime
 import io
 
 # --- CONFIGURATION ---
-st.set_page_config(page_title="Assistant AGOrA", page_icon="🎓")
+st.set_page_config(page_title="Coach AGOrA", page_icon="🚀")
 st.title("🎓 Assistant PFMP AGOrA")
 
 # Récupération sécurisée de la clé API
