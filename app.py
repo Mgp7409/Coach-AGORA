@@ -1,37 +1,108 @@
 import streamlit as st
+import pandas as pd
 import google.generativeai as genai
+from datetime import datetime
 
-st.title("🛠️ Mode Diagnostic")
+# --- CONFIGURATION ---
+st.set_page_config(page_title="Assistant AGOrA", page_icon="🎓")
+st.title("🎓 Assistant PFMP AGOrA")
 
-# 1. Vérification de la Clé
+# Récupération sécurisée de la clé API
 try:
     api_key = st.secrets["GOOGLE_API_KEY"]
-    # On affiche les 4 premiers caractères pour voir si elle est bien lue (sans tout dévoiler)
-    st.write(f"Clé détectée : {api_key[:4]}...")
     genai.configure(api_key=api_key)
-except Exception as e:
-    st.error(f"Problème de lecture de la clé : {e}")
+except:
+    st.error("La clé API est manquante. Configurez les 'Secrets' dans Streamlit.")
     st.stop()
 
-# 2. Demander à Google "Quels modèles sont disponibles pour moi ?"
-if st.button("Lancer le test de connexion"):
-    try:
-        st.info("Interrogation des serveurs Google...")
-        list_models = genai.list_models()
-        
-        found_models = []
-        for m in list_models:
-            # On cherche les modèles qui savent générer du texte
-            if 'generateContent' in m.supported_generation_methods:
-                found_models.append(m.name)
-        
-        if found_models:
-            st.success("✅ Connexion RÉUSSIE ! Voici les modèles exacts que votre clé peut utiliser :")
-            for model_name in found_models:
-                st.code(model_name)
-        else:
-            st.warning("⚠️ Connexion réussie, mais aucun modèle trouvé. Votre clé API est peut-être restreinte.")
+# --- LE CERVEAU (VOTRE GEM AGORA) ---
+SYSTEM_PROMPT = """
+Tu es un Assistant Pédagogique Interactif (API), strictement dédié à l'entraînement des élèves de Bac Pro AGOrA.
+Ta mission unique : aider l’élève à structurer sa PFMP sans jamais faire le travail à sa place.
+
+RÈGLES ABSOLUES :
+1. Tu ne rédiges JAMAIS à la place de l'élève.
+2. Tu poses UNE SEULE question à la fois.
+3. Tu attends toujours la réponse avant de continuer.
+4. Ton ton est bienveillant, direct et encourageant.
+
+DÉROULEMENT SÉQUENCÉ :
+1. ACCUEIL : Demande quelle activité l'élève veut travailler.
+2. CONTEXTE : Demande le Lieu et le Service.
+3. DÉVELOPPEMENT : Demande les étapes, les outils et la procédure.
+4. ANALYSE : Demande de justifier les choix et d'expliquer une difficulté ou initiative.
+5. CONCLUSION : Fais une synthèse courte et propose un axe de progrès.
+"""
+
+# Configuration du modèle avec VOTRE version spécifique
+# Note: On enlève le prefixe 'models/' car la librairie l'ajoute souvent toute seule
+model = genai.GenerativeModel(
+    model_name='gemini-2.5-pro-preview-03-25',
+    system_instruction=SYSTEM_PROMPT
+)
+
+# --- GESTION DONNÉES ---
+if "conversation_log" not in st.session_state:
+    st.session_state.conversation_log = []
+
+def save_log(student_id, role, content):
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    st.session_state.conversation_log.append({
+        "Heure": timestamp,
+        "Eleve": student_id,
+        "Role": role,
+        "Message": content
+    })
+
+# --- INTERFACE ---
+with st.sidebar:
+    st.header("Espace Professeur")
+    student_id = st.text_input("Identifiant Élève (Prénom/Groupe) :")
+    
+    st.markdown("---")
+    # Bouton pour télécharger les données
+    if st.session_state.conversation_log:
+        df = pd.DataFrame(st.session_state.conversation_log)
+        # Conversion CSV pour Excel
+        csv = df.to_csv(index=False, sep=';').encode('utf-8-sig')
+        st.download_button(
+            "📥 Télécharger les conversations (CSV)",
+            csv,
+            "conversations_agora.csv",
+            "text/csv"
+        )
+
+# --- CHAT ---
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+    # Message d'amorce
+    st.session_state.messages.append({"role": "assistant", "content": "Bonjour ! Je suis ton coach pour la PFMP. Quelle activité veux-tu préparer aujourd'hui ?"})
+
+# Affichage
+for msg in st.session_state.messages:
+    st.chat_message(msg["role"]).write(msg["content"])
+
+# Interaction
+if prompt := st.chat_input("Ta réponse..."):
+    if not student_id:
+        st.warning("⚠️ Merci d'entrer ton identifiant dans le menu à gauche avant de commencer !")
+    else:
+        # 1. Message Élève
+        st.chat_message("user").write(prompt)
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        save_log(student_id, "Eleve", prompt)
+
+        # 2. Réponse IA
+        try:
+            # Construction historique
+            chat_history = [{"role": "user" if m["role"] == "user" else "model", "parts": [m["content"]]} for m in st.session_state.messages]
             
-    except Exception as e:
-        st.error(f"❌ ÉCHEC TOTAL : {e}")
-        st.write("Cela signifie souvent que la Clé API est invalide ou mal copiée.")
+            response = model.generate_content(chat_history)
+            bot_reply = response.text
+            
+            st.chat_message("assistant").write(bot_reply)
+            st.session_state.messages.append({"role": "assistant", "content": bot_reply})
+            save_log(student_id, "Assistant", bot_reply)
+            
+        except Exception as e:
+            st.error(f"Erreur : {e}")
