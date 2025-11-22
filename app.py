@@ -37,7 +37,7 @@ DÉROULEMENT SÉQUENCÉ :
 # Configuration du modèle avec VOTRE version spécifique
 # Note: On enlève le prefixe 'models/' car la librairie l'ajoute souvent toute seule
 model = genai.GenerativeModel(
-    model_name='gemini-2.5-pro-preview-03-25',
+    model_name='gemini-1.5-flash',
     system_instruction=SYSTEM_PROMPT
 )
 
