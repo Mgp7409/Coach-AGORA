@@ -87,7 +87,7 @@ if prompt := st.chat_input("Ta réponse..."):
 
             chat_completion = client.chat.completions.create(
                 messages=messages_for_api,
-                model="llama3-8b-8192", # Modèle gratuit, rapide et très bon
+                model="llama-3.3-70b-versatile", # <--- C'est le nouveau modèle puissant et gratuit
                 temperature=0.7,
             )
             
