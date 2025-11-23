@@ -4,6 +4,7 @@ from groq import Groq
 from datetime import datetime
 from gtts import gTTS
 import io
+import re  # Nouveau module pour nettoyer le texte
 
 # --- 1. CONFIGURATION ---
 st.set_page_config(page_title="1AGORA - Inclusive", page_icon="🏢")
@@ -12,9 +13,7 @@ st.set_page_config(page_title="1AGORA - Inclusive", page_icon="🏢")
 if "mode_dys" not in st.session_state:
     st.session_state.mode_dys = False
 
-# Style standard ou Style DYS
 if st.session_state.mode_dys:
-    # Police plus grande, interligne fort, sans serif (type Arial/Verdana)
     dys_style = """
     <style>
     html, body, [class*="css"] {
@@ -27,7 +26,6 @@ if st.session_state.mode_dys:
     """
     st.markdown(dys_style, unsafe_allow_html=True)
 
-# Masquer le menu technique
 hide_menu = """<style>#MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}</style>"""
 st.markdown(hide_menu, unsafe_allow_html=True)
 
@@ -41,7 +39,21 @@ except:
     st.error("⚠️ Clé API manquante.")
     st.stop()
 
-# --- 4. STRUCTURE DU LIVRE ---
+# --- 4. FONCTION DE NETTOYAGE AUDIO (NOUVEAU) ---
+def clean_text_for_audio(text):
+    # Enlève le gras/italique (**mot** -> mot)
+    text = re.sub(r'[\*_]{1,3}', '', text)
+    # Enlève les titres (### Titre -> Titre)
+    text = re.sub(r'#+', '', text)
+    # Enlève les liens [Texte](URL) -> Texte
+    text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', text)
+    # Enlève les puces de liste (- )
+    text = re.sub(r'^\s*-\s+', '', text, flags=re.MULTILINE)
+    # Enlève les sauts de ligne multiples
+    text = re.sub(r'\n+', '. ', text)
+    return text
+
+# --- 5. STRUCTURE DU LIVRE ---
 DB_PREMIERE = {
     "SP1 : GESTION DES ESPACES": {
         "Chap 1 : Aménagement": "COMPÉTENCE : Proposer aménagement ergonomique.",
@@ -73,9 +85,9 @@ DB_SECONDE = {
     }
 }
 
-# --- 5. SYSTÈME DE GAMIFICATION ---
+# --- 6. SYSTÈME DE GAMIFICATION ---
 GRADES = {
-    0: "👶 Stagiaire en observation",
+    0: "👶 Stagiaire",
     100: "👦 Assistant(e) Junior",
     300: "👨‍💼 Assistant(e) Confirmé(e)",
     600: "👩‍💻 Responsable de Pôle",
@@ -96,7 +108,7 @@ def ajouter_xp():
     st.balloons()
     st.toast("Bravo ! +50 XP 🚀", icon="⭐")
 
-# --- 6. CERVEAU ADAPTATIF ---
+# --- 7. CERVEAU ADAPTATIF ---
 def get_system_prompt(simplified_mode):
     base_prompt = """
     TU ES : Le Superviseur de l'Agence PRO'AGORA.
@@ -105,15 +117,13 @@ def get_system_prompt(simplified_mode):
     2. Donne toutes les données brutes immédiatement.
     3. Ne fais jamais le travail à la place de l'élève.
     """
-    
     if simplified_mode:
         base_prompt += """
         ⚠️ MODE ACCESSIBILITÉ ACTIVÉ :
         - Fais des phrases courtes et simples.
-        - Utilise des listes à puces systématiquement.
+        - Utilise des listes à puces.
         - Mets les mots importants en **GRAS**.
-        - Explique les termes compliqués entre parenthèses.
-        - Une seule consigne à la fois.
+        - Explique les termes compliqués.
         """
     else:
         base_prompt += """
@@ -121,7 +131,7 @@ def get_system_prompt(simplified_mode):
         """
     return base_prompt
 
-# --- 7. LOGS ---
+# --- 8. LOGS ---
 if "conversation_log" not in st.session_state: st.session_state.conversation_log = []
 if "messages" not in st.session_state: st.session_state.messages = []
 
@@ -132,7 +142,7 @@ def save_log(student_id, role, content):
         "Eleve": student_id,
         "Role": role,
         "Message": content,
-        "XP_Sauvegarde": st.session_state.xp # On sauvegarde l'XP
+        "XP_Sauvegarde": st.session_state.xp
     })
 
 def lancer_mission():
@@ -154,12 +164,11 @@ def lancer_mission():
     except Exception as e:
         st.error(f"Erreur IA : {e}")
 
-# --- 8. INTERFACE SIDEBAR ---
+# --- 9. INTERFACE SIDEBAR ---
 with st.sidebar:
     st.header("👤 Mon Profil")
     student_id = st.text_input("Prénom :", key="prenom_eleve")
     
-    # GAMIFICATION DISPLAY
     grade_actuel = get_grade(st.session_state.xp)
     st.metric("Niveau & XP", value=f"{st.session_state.xp} XP", delta=grade_actuel)
     progress_val = min(st.session_state.xp / 1000, 1.0)
@@ -168,8 +177,8 @@ with st.sidebar:
     st.markdown("---")
     st.header("♿ Accessibilité")
     st.session_state.mode_dys = st.checkbox("👁️ Affichage DYS (Gros caractères)")
-    st.session_state.mode_simple = st.checkbox("🧠 Consignes Simplifiées (Facile à lire)")
-    st.session_state.mode_audio = st.checkbox("🔊 Lecture Audio (Synthèse vocale)")
+    st.session_state.mode_simple = st.checkbox("🧠 Consignes Simplifiées")
+    st.session_state.mode_audio = st.checkbox("🔊 Lecture Audio")
 
     st.markdown("---")
     st.header("🗂️ Missions")
@@ -182,7 +191,7 @@ with st.sidebar:
     with col1:
         st.button("🚀 LANCER", type="primary", on_click=lancer_mission)
     with col2:
-        st.button("✅ FINIR (+50XP)", on_click=ajouter_xp)
+        st.button("✅ FINIR", on_click=ajouter_xp)
 
     st.markdown("---")
     st.subheader("💾 Sauvegarde")
@@ -197,34 +206,31 @@ with st.sidebar:
             df_hist = pd.read_csv(uploaded_csv, sep=';')
             st.session_state.messages = []
             st.session_state.conversation_log = []
-            
-            # Récupération de l'XP du fichier
             if 'XP_Sauvegarde' in df_hist.columns:
                 last_xp = df_hist['XP_Sauvegarde'].iloc[-1]
                 st.session_state.xp = int(last_xp)
-            
             for _, row in df_hist.iterrows():
                 role_chat = "user" if row['Role'] == "Eleve" else "assistant"
                 st.session_state.messages.append({"role": role_chat, "content": row['Message']})
                 save_log(row.get('Eleve', student_id), row['Role'], row['Message'])
-            st.success(f"Restauré ! Niveau récupéré : {st.session_state.xp} XP")
+            st.success(f"Restauré ! Niveau : {st.session_state.xp} XP")
             st.rerun()
         except: st.error("Fichier invalide.")
 
-# --- 9. CHAT & AUDIO ---
+# --- 10. CHAT & AUDIO ---
 if not st.session_state.messages:
     st.info("👋 Bonjour ! Configure tes options d'accessibilité à gauche et lance une mission.")
 else:
     for i, msg in enumerate(st.session_state.messages):
         st.chat_message(msg["role"]).write(msg["content"])
         
-        # BOUTON AUDIO (Si activé et si c'est un message de l'assistant)
+        # LECTEUR AUDIO AVEC TEXTE NETTOYÉ
         if st.session_state.mode_audio and msg["role"] == "assistant":
-            # On génère un petit lecteur audio sous le message
-            # On utilise une clé unique 'audio_i' pour ne pas recharger à chaque fois
             if f"audio_{i}" not in st.session_state:
                 try:
-                    tts = gTTS(text=msg["content"], lang='fr')
+                    # On nettoie le texte avant de l'envoyer à gTTS
+                    clean_text = clean_text_for_audio(msg["content"])
+                    tts = gTTS(text=clean_text, lang='fr')
                     audio_buffer = io.BytesIO()
                     tts.write_to_fp(audio_buffer)
                     st.session_state[f"audio_{i}"] = audio_buffer
