@@ -5,8 +5,8 @@ from groq import Groq
 from datetime import datetime
 
 # --- CONFIGURATION ---
-st.set_page_config(page_title="Agence Pro'AGOrA", page_icon="🏢")
-st.title("🏢 Agence Pro'AGOrA - Superviseur Virtuel")
+st.set_page_config(page_title="Activité Pro'AGOrA", page_icon="🏢")
+st.title("🏢 Restitution d'activité - Superviseur Virtuel")
 
 # Récupération de la clé Groq (adaptée pour Streamlit Cloud)
 try:
