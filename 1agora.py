@@ -3,14 +3,22 @@ import pandas as pd
 from groq import Groq
 from datetime import datetime
 
-# --- CONFIGURATION ---
+# --- 1. CONFIGURATION ---
 st.set_page_config(page_title="1AGORA", page_icon="🏢")
-hide_menu = """<style>#MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}</style>"""
+
+# Masquer le menu technique
+hide_menu = """
+<style>
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+header {visibility: hidden;}
+</style>
+"""
 st.markdown(hide_menu, unsafe_allow_html=True)
 
 st.title("🏢 Agence PRO'AGORA - Classe de 1ère")
 
-# --- CONNEXION GROQ ---
+# --- 2. CONNEXION GROQ ---
 try:
     api_key = st.secrets["GROQ_API_KEY"]
     client = Groq(api_key=api_key)
@@ -18,7 +26,8 @@ except:
     st.error("⚠️ Clé API manquante. Vérifiez les 'Secrets' de Streamlit.")
     st.stop()
 
-# --- SCÉNARIOS (Livres Foucher) ---
+# --- 3. SCÉNARIOS (Livres Foucher) ---
+
 DB_SECONDE = {
     "Pôle 1 : Gestion Relations Externes": {
         "Dossier 1 : L'accueil physique et téléphonique": "CONTEXTE : Tu es à l'accueil de l'entreprise 'Azur Buro'. DONNÉES : Appel de M. Dupuis mécontent. MISSION : Fiche de message + Réponse diplomate.",
@@ -43,7 +52,7 @@ DB_PREMIERE = {
     }
 }
 
-# --- CERVEAU ---
+# --- 4. CERVEAU (PROMPT SYSTÈME) ---
 SYSTEM_PROMPT = """
 Tu es le Superviseur PRO'AGORA. Tu encadres un élève de 1ère.
 TON RÔLE : Fournir les données du dossier choisi et guider l'élève.
@@ -52,24 +61,51 @@ TON RÔLE : Fournir les données du dossier choisi et guider l'élève.
 3. Sois pro et exigeant.
 """
 
-# --- LOGS ---
-if "conversation_log" not in st.session_state: st.session_state.conversation_log = []
-def save_log(student_id, role, content):
-    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    st.session_state.conversation_log.append({"Heure": ts, "Eleve": student_id, "Role": role, "Message": content})
+# --- 5. GESTION DES LOGS (Correction de l'erreur ici) ---
+if "conversation_log" not in st.session_state:
+    st.session_state.conversation_log = []
 
-# --- INTERFACE ---
+def save_log(student_id, role, content):
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    st.session_state.conversation_log.append({
+        "Heure": timestamp,
+        "Eleve": student_id,
+        "Role": role,
+        "Message": content
+    })
+
+# --- 6. INTERFACE ---
 with st.sidebar:
     st.header("🗂️ Navigation 1AGORA")
     student_id = st.text_input("Votre Prénom :")
     st.markdown("---")
+    
+    # Menu de gauche
     niveau = st.radio("Module :", ["1ère (Suivi Admin)", "2nde (Révisions)"])
-    base = DB_PREMIERE if niveau == "1ère (Suivi Admin)" else DB_SECONDE
-    theme = st.selectbox("Thème :", list(base.keys()))
-    dossier = st.selectbox("Dossier :", list(base[theme].keys()))
+    if niveau == "1ère (Suivi Admin)":
+        base_active = DB_PREMIERE
+    else:
+        base_active = DB_SECONDE
+        
+    theme_choisi = st.selectbox("Thème :", list(base_active.keys()))
+    dossier_choisi = st.selectbox("Dossier :", list(base_active[theme_choisi].keys()))
     
     st.markdown("---")
+    
+    # Bouton Lancer
     if st.button("🚀 LANCER LE DOSSIER", type="primary"):
-        ctx = base[theme][dossier]
-        msg = f"👋 Bonjour Opérateur. Dossier : **{dossier}**.\n\nCONTEXTE :\n{ctx}\n\nQuelle est ta première action ?"
-        st.session
+        contexte_mission = base_active[theme_choisi][dossier_choisi]
+        start_msg = f"👋 Bonjour Opérateur. Dossier : **{dossier_choisi}**.\n\nCONTEXTE :\n{contexte_mission}\n\nQuelle est ta première action ?"
+        st.session_state.messages = [{"role": "assistant", "content": start_msg}]
+        st.rerun()
+
+    # Bouton Télécharger
+    st.markdown("---")
+    if st.session_state.conversation_log:
+        df = pd.DataFrame(st.session_state.conversation_log)
+        csv = df.to_csv(index=False, sep=';').encode('utf-8-sig')
+        st.download_button("📥 Télécharger (CSV)", csv, "suivi_1agora.csv", "text/csv")
+
+# --- 7. CHAT ---
+if "messages" not in st.session_state:
+    st.info("⬅️ Choisissez un dossier à gauche et cliquez sur LANCER.")
