@@ -66,18 +66,18 @@ def clean_text_for_audio(text):
 
 # --- 5. STRUCTURE DU LIVRE (TITRES PROPRES) ---
 DB_PREMIERE = {
-    "SP1 : GESTION DES ESPACES DE TRAVAIL": {
+    "GESTION DES ESPACES DE TRAVAIL": {
         "Aménagement des espaces": "COMPÉTENCE : Proposer un aménagement de bureau ergonomique et choisir le mobilier adapté.",
         "Environnement numérique": "COMPÉTENCE : Lister le matériel informatique, les logiciels et vérifier les règles RGPD.",
         "Ressources partagées": "COMPÉTENCE : Gérer le stock de fournitures (commandes/partage) et les réservations (salles/véhicules).",
         "Partage de l'information": "COMPÉTENCE : Améliorer la communication interne (Note de service, Outils collaboratifs, Agenda)."
     },
-    "SP2 : GESTION DES RELATIONS PARTENAIRES": {
+    "GESTION DES RELATIONS PARTENAIRES": {
         "Lancement produit / Vente": "COMPÉTENCE : Planifier des tâches (Planigramme), Négocier un prix de vente, Communication commerciale.",
         "Organisation de réunions": "COMPÉTENCE : Convoquer les participants, Réserver la salle, Préparer l'ordre du jour, Rédiger le Compte-Rendu.",
         "Organisation déplacement": "COMPÉTENCE : Réserver un déplacement (Train/Avion/Hôtel) avec budget contraint. Établir l'Ordre de Mission."
     },
-    "SP3 : GESTION DES RESSOURCES HUMAINES": {
+    "GESTION DES RESSOURCES HUMAINES": {
         "Recrutement": "COMPÉTENCE : Définir le Profil de poste, Rédiger l'annonce d'embauche, Trier des CV.",
         "Intégration du personnel": "COMPÉTENCE : Préparer l'arrivée (matériel, badges), Créer le livret d'accueil, Organiser l'accueil.",
         "Dossiers du personnel": "COMPÉTENCE : Rédiger un Contrat de travail, Mettre à jour le Registre Unique du Personnel, Faire un Avenant."
