@@ -2,8 +2,6 @@ import streamlit as st
 import pandas as pd
 from groq import Groq
 from datetime import datetime
-import docx
-from pypdf import PdfReader
 
 # --- 1. CONFIGURATION ---
 st.set_page_config(page_title="1AGORA", page_icon="🏢")
@@ -28,24 +26,9 @@ except:
     st.error("⚠️ Clé API manquante.")
     st.stop()
 
-# --- 3. LECTURE FICHIERS ---
-def extract_text_from_file(uploaded_file):
-    text = ""
-    try:
-        if uploaded_file.name.endswith(".docx"):
-            doc = docx.Document(uploaded_file)
-            for para in doc.paragraphs: text += para.text + "\n"
-        elif uploaded_file.name.endswith(".pdf"):
-            reader = PdfReader(uploaded_file)
-            for page in reader.pages: text += page.extract_text() + "\n"
-        elif uploaded_file.name.endswith(".txt"):
-            text = uploaded_file.read().decode("utf-8")
-        return text
-    except Exception as e: return f"Erreur lecture : {e}"
+# --- 3. SCÉNARIOS (CONFORMES SOMMAIRE FOUCHER) ---
+# NOTE : À compléter avec les textes exacts de vos corrigés PDF
 
-# --- 4. SCÉNARIOS (CONFORMES À VOTRE SOMMAIRE FOUCHER) ---
-
-# NOTE : Vous devrez ouvrir vos PDF corrigés et copier les contextes à la place de "..."
 DB_PREMIERE = {
     "SP1 : ÉCOACTIF SOLIDAIRE (Espaces & Info)": {
         "Chap 1 : Organiser le fonctionnement des espaces": "CONTEXTE : Écoactif Solidaire. Problème d'aménagement. MISSION : 1. Proposer un environnement adapté. 2. Sélectionner les équipements.",
@@ -77,16 +60,16 @@ DB_SECONDE = {
     }
 }
 
-# --- 5. CERVEAU ---
+# --- 4. CERVEAU ---
 SYSTEM_PROMPT = """
 Tu es le Superviseur PRO'AGORA. Tu encadres un élève de 1ère.
 TON RÔLE :
 1. Donne le CONTEXTE de l'entreprise (Écoactif, Océaform ou Léa Nature) dès le début.
-2. Si l'élève dépose un FICHIER, analyse-le.
+2. Guide l'élève étape par étape.
 3. Ne fais jamais le travail à sa place.
 """
 
-# --- 6. LOGS ---
+# --- 5. GESTION LOGS ---
 if "conversation_log" not in st.session_state: st.session_state.conversation_log = []
 if "messages" not in st.session_state: st.session_state.messages = []
 
@@ -102,12 +85,13 @@ def lancer_mission():
     msg = f"👋 Bonjour Opérateur. Dossier : **{dossier}**.\n\nCONTEXTE :\n{contexte}\n\nQuelle est ta première action ?"
     st.session_state.messages = [{"role": "assistant", "content": msg}]
 
-# --- 7. INTERFACE ---
+# --- 6. INTERFACE ---
 with st.sidebar:
     st.header("🗂️ Navigation 1AGORA")
     student_id = st.text_input("Votre Prénom :", key="prenom_eleve")
     st.markdown("---")
     
+    # Navigation
     niveau = st.radio("Livre / Module :", ["1ère (Programme Foucher)", "2nde (Révisions)"], key="niveau_select")
     base_active = DB_PREMIERE if niveau == "1ère (Programme Foucher)" else DB_SECONDE
     theme = st.selectbox("Situation Pro :", list(base_active.keys()), key="theme_select")
@@ -138,30 +122,11 @@ with st.sidebar:
             st.rerun()
         except: st.error("CSV invalide.")
 
-# --- 8. CHAT ---
+# --- 7. CHAT ---
 if not st.session_state.messages:
     st.info("⬅️ Choisissez une Situation Professionnelle (Écoactif, Océaform, Léa Nature) et lancez.")
 else:
     for msg in st.session_state.messages: st.chat_message(msg["role"]).write(msg["content"])
-
-    with st.expander("📎 Joindre un fichier (Word/PDF)"):
-        uploaded_doc = st.file_uploader("Fichier à corriger", type=['docx', 'pdf', 'txt'], key="doc_upload")
-        if uploaded_doc and st.button("Envoyer fichier"):
-            content = extract_text_from_file(uploaded_doc)
-            user_msg = f"📄 Fichier **{uploaded_doc.name}** : {content}"
-            st.chat_message("user").write(f"📄 *Fichier envoyé : {uploaded_doc.name}*")
-            st.session_state.messages.append({"role": "user", "content": user_msg})
-            save_log(student_id, "Eleve", f"[FICHIER] {uploaded_doc.name}")
-            # Réponse IA
-            try:
-                msgs = [{"role": "system", "content": SYSTEM_PROMPT}] + [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]
-                chat = client.chat.completions.create(messages=msgs, model="llama-3.3-70b-versatile", temperature=0.7)
-                rep = chat.choices[0].message.content
-                st.chat_message("assistant").write(rep)
-                st.session_state.messages.append({"role": "assistant", "content": rep})
-                save_log(student_id, "Superviseur", rep)
-                st.rerun()
-            except Exception as e: st.error(f"Erreur : {e}")
 
     if prompt := st.chat_input("Votre réponse..."):
         if not student_id: st.warning("⚠️ Prénom requis !")
