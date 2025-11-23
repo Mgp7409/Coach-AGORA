@@ -62,21 +62,21 @@ def clean_text_for_audio(text):
 
 # --- 5. STRUCTURE DU LIVRE ---
 DB_PREMIERE = {
-    "SP1 : GESTION DES ESPACES": {
-        "Chap 1 : Aménagement": "COMPÉTENCE : Proposer aménagement ergonomique.",
-        "Chap 2 : Environnement numérique": "COMPÉTENCE : Matériel informatique et RGPD.",
-        "Chap 3 : Ressources partagées": "COMPÉTENCE : Stocks fournitures et Réservations.",
-        "Chap 4 : Partage info": "COMPÉTENCE : Com interne et Outils collaboratifs."
+    "GESTION DES ESPACES": {
+        "1 : Aménagement": "COMPÉTENCE : Proposer aménagement ergonomique.",
+        "2 : Environnement numérique": "COMPÉTENCE : Matériel informatique et RGPD.",
+        "3 : Ressources partagées": "COMPÉTENCE : Stocks fournitures et Réservations.",
+        "4 : Partage info": "COMPÉTENCE : Com interne et Outils collaboratifs."
     },
-    "SP2 : RELATIONS PARTENAIRES": {
-        "Chap 5 : Vente & Produit": "COMPÉTENCE : Planigramme, Négociation, Com commerciale.",
-        "Chap 6 : Réunions": "COMPÉTENCE : Convocation, Ordre du jour, Compte-Rendu.",
-        "Chap 7 : Déplacement": "COMPÉTENCE : Réservation Transport/Hôtel, Ordre de Mission."
+    "RELATIONS PARTENAIRES": {
+        "5 : Vente & Produit": "COMPÉTENCE : Planigramme, Négociation, Com commerciale.",
+        "6 : Réunions": "COMPÉTENCE : Convocation, Ordre du jour, Compte-Rendu.",
+        "7 : Déplacement": "COMPÉTENCE : Réservation Transport/Hôtel, Ordre de Mission."
     },
-    "SP3 : RESSOURCES HUMAINES": {
-        "Chap 8 : Recrutement": "COMPÉTENCE : Profil de poste, Annonce, Tri CV.",
-        "Chap 9 : Intégration": "COMPÉTENCE : Livret d'accueil, Parcours d'intégration.",
-        "Chap 10 : Admin RH": "COMPÉTENCE : Contrat, Registre personnel, Avenant."
+    "RESSOURCES HUMAINES": {
+        "8 : Recrutement": "COMPÉTENCE : Profil de poste, Annonce, Tri CV.",
+        "9 : Intégration": "COMPÉTENCE : Livret d'accueil, Parcours d'intégration.",
+        "10 : Admin RH": "COMPÉTENCE : Contrat, Registre personnel, Avenant."
     },
     "TRANSVERSAL": {
         "Mission 1 : Réorganisation": "COMPÉTENCE : Projet déménagement.",
