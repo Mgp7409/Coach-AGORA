@@ -1,4 +1,6 @@
 streamlit
 pandas
 groq
+python-docx
+pypdf
 gtts
