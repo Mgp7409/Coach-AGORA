@@ -5,12 +5,11 @@ from groq import Groq
 from datetime import datetime
 
 # --- CONFIGURATION ---
-st.set_page_config(page_title="Activité Pro'AGOrA", page_icon="🏢")
-st.title("🏢 Restitution d'activité - Superviseur Virtuel")
+st.set_page_config(page_title="Agence Pro'AGOrA", page_icon="🏢")
+st.title("🏢 Agence Pro'AGOrA - Superviseur Virtuel")
 
 # Récupération de la clé Groq (adaptée pour Streamlit Cloud)
 try:
-    # Utilise os.environ.get pour la compatibilité avec divers environnements
     # La clé doit être configurée comme variable d'environnement ou dans st.secrets
     api_key = os.environ.get("GROQ_API_KEY") or st.secrets["GROQ_API_KEY"]
     client = Groq(api_key=api_key)
@@ -32,8 +31,8 @@ RÈGLES DE CONDUITE & GARDE-FOUS :
 5. Ton & Format : Professionnel, utilise des emojis (🚀, ✅, 💡) et des réponses courtes/ciblées.
 
 DÉROULEMENT SÉQUENCÉ :
-1. ACCUEIL : Afficher le menu de mission.
-2. EXPLORATION FACTUELLE : Demander le lieu d'accueil et le service précis.
+1. ACCUEIL (Choix de Mission) : Afficher le menu détaillé des missions (A, B, C, D, E) pour commencer.
+2. EXPLORATION FACTUELLE : Après le choix de la mission, demander le lieu d'accueil et le service précis AINSI que l'activité réalisée.
 3. DÉVELOPPEMENT : Demander les étapes, outils, logiciels.
 4. ANALYSE : Demander justification (pourquoi l'outil) et initiatives/difficultés.
 5. CONCLUSION : Synthèse, piste de progrès, question sur l'axe d'amélioration.
@@ -45,7 +44,7 @@ if "conversation_log" not in st.session_state:
     st.session_state.conversation_log = []
 
 def save_log(student_id, role, content):
-    """Saves conversation entries into the session state log."""
+    """Sauvegarde les entrées de la conversation dans le journal de session."""
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     st.session_state.conversation_log.append({
         "Heure": timestamp,
@@ -70,6 +69,7 @@ Superviseur Virtuel pour Opérateurs Juniors (Bac Pro). **Rappel de sécurité :
 
 **Indique la lettre de la mission pour commencer.**
 """
+
 
 # --- INTERFACE ---
 with st.sidebar:
@@ -124,7 +124,6 @@ if prompt := st.chat_input("Écris ta réponse ici..."):
             messages_for_api = [{"role": "system", "content": SYSTEM_PROMPT}]
             # Ajout de la conversation pour le contexte
             for m in st.session_state.messages:
-                # Groq (et autres APIs) utilise 'assistant' ou 'user'
                 messages_for_api.append({"role": m["role"], "content": m["content"]})
 
             chat_completion = client.chat.completions.create(
