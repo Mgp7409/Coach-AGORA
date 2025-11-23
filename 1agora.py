@@ -4,10 +4,15 @@ from groq import Groq
 from datetime import datetime
 from gtts import gTTS
 import io
-import re  # Nouveau module pour nettoyer le texte
+import re 
 
 # --- 1. CONFIGURATION ---
-st.set_page_config(page_title="1AGORA - Inclusive", page_icon="🏢")
+# J'ai ajouté 'initial_sidebar_state="expanded"' pour forcer le volet ouvert
+st.set_page_config(
+    page_title="1AGORA - Inclusive", 
+    page_icon="🏢",
+    initial_sidebar_state="expanded"
+)
 
 # --- 2. GESTION DE LA DIFFÉRENCIATION (CSS DYNAMIQUE) ---
 if "mode_dys" not in st.session_state:
@@ -26,7 +31,14 @@ if st.session_state.mode_dys:
     """
     st.markdown(dys_style, unsafe_allow_html=True)
 
-hide_menu = """<style>#MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}</style>"""
+# --- CORRECTION ICI : On ne cache que le footer, on laisse le header visible ---
+hide_menu = """
+<style>
+footer {visibility: hidden;}
+/* On s'assure que le header (bouton partage + sidebar) reste visible */
+header {visibility: visible !important;}
+</style>
+"""
 st.markdown(hide_menu, unsafe_allow_html=True)
 
 st.title("♾️ Agence PRO'AGORA")
@@ -36,21 +48,16 @@ try:
     api_key = st.secrets["GROQ_API_KEY"]
     client = Groq(api_key=api_key)
 except:
-    st.error("⚠️ Clé API manquante.")
+    st.error("⚠️ Clé API manquante. Vérifiez votre fichier secrets.toml.")
     st.stop()
 
-# --- 4. FONCTION DE NETTOYAGE AUDIO (NOUVEAU) ---
+# --- 4. FONCTION DE NETTOYAGE AUDIO ---
 def clean_text_for_audio(text):
-    # Enlève le gras/italique (**mot** -> mot)
-    text = re.sub(r'[\*_]{1,3}', '', text)
-    # Enlève les titres (### Titre -> Titre)
-    text = re.sub(r'#+', '', text)
-    # Enlève les liens [Texte](URL) -> Texte
-    text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', text)
-    # Enlève les puces de liste (- )
-    text = re.sub(r'^\s*-\s+', '', text, flags=re.MULTILINE)
-    # Enlève les sauts de ligne multiples
-    text = re.sub(r'\n+', '. ', text)
+    text = re.sub(r'[\*_]{1,3}', '', text) # Enlève le gras/italique
+    text = re.sub(r'#+', '', text) # Enlève les titres
+    text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', text) # Enlève les liens
+    text = re.sub(r'^\s*-\s+', '', text, flags=re.MULTILINE) # Enlève les puces
+    text = re.sub(r'\n+', '. ', text) # Enlève les sauts de ligne
     return text
 
 # --- 5. STRUCTURE DU LIVRE ---
@@ -228,7 +235,6 @@ else:
         if st.session_state.mode_audio and msg["role"] == "assistant":
             if f"audio_{i}" not in st.session_state:
                 try:
-                    # On nettoie le texte avant de l'envoyer à gTTS
                     clean_text = clean_text_for_audio(msg["content"])
                     tts = gTTS(text=clean_text, lang='fr')
                     audio_buffer = io.BytesIO()
@@ -241,7 +247,7 @@ else:
 
     if prompt := st.chat_input("Votre réponse..."):
         if not student_id:
-            st.warning("⚠️ Prénom requis !")
+            st.warning("⚠️ Prénom requis dans la barre latérale !")
         else:
             st.chat_message("user").write(prompt)
             st.session_state.messages.append({"role": "user", "content": prompt})
