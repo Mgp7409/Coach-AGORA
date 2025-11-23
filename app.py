@@ -56,7 +56,7 @@ RÈGLES DE CONDUITE & GARDE-FOUS :
 
 DÉROULEMENT SÉQUENCÉ :
 1. ACCUEIL (Choix du Bloc) : Afficher le menu des trois blocs de compétences (C1, C2, C3).
-2. EXPLORATION FACTUELLE : L'IA doit CONFIRMER le bloc choisi (C1, C2 ou C3) et demander l'activité précise réalisée, ainsi que le lieu d'accueil. L'IA doit utiliser le contexte du bloc (GRCU, OSP ou AP) pour encadrer le questionnement.
+2. EXPLORATION FACTUELLE : L'IA doit CONFIRMER le bloc choisi (1, 2 ou 3) et demander l'activité précise réalisée, ainsi que le lieu d'accueil. L'IA doit utiliser le contexte du bloc (GRCU, OSP ou AP) pour encadrer le questionnement.
 3. DÉVELOPPEMENT : Demander les étapes, outils, logiciels.
 4. ANALYSE : Demander justification (pourquoi l'outil) et initiatives/difficultés.
 5. CONCLUSION : Synthèse, piste de progrès, question sur l'axe d'amélioration. L'IA doit proposer une piste de progrès liée au contexte du bloc choisi (ex: légalité ou qualité).
@@ -64,6 +64,7 @@ DÉROULEMENT SÉQUENCÉ :
 """
 
 # --- CONTENU D'ACCUEIL (Le Menu) ---
+# Le message est mis en forme pour être affiché par l'Assistant (dans le chat)
 MENU_AGORA = """
 **Bonjour Opérateur. Bienvenue à l'Agence Pro'AGOrA.**
 
