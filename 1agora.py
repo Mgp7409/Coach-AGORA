@@ -1,220 +1,279 @@
 import streamlit as st
 import pandas as pd
-import os
 from groq import Groq
 from datetime import datetime
+from gtts import gTTS
+import io
+import re
+import docx
+from pypdf import PdfReader
 
-# --- 1. CONFIGURATION DE LA PAGE ---
-st.set_page_config(page_title="Agence Pro’AGoRA", page_icon="🏢", layout="wide")
+# --- 1. CONFIGURATION ---
+# J'ai ajouté initial_sidebar_state="expanded" pour forcer le volet à s'ouvrir
+st.set_page_config(page_title="1AGORA", page_icon="🏢", initial_sidebar_state="expanded")
 
-# Titre et sous-titre
-st.title("🏢 Agence Pro’AGoRA")
-st.markdown("**Superviseur Virtuel pour Opérateurs Juniors (Bac Pro)**")
+# --- 2. GESTION DU STYLE (ACCESSIBILITÉ) ---
+if "mode_dys" not in st.session_state:
+    st.session_state.mode_dys = False
 
-# --- 2. CONNEXION GROQ ---
-# Assure-toi d'avoir mis ta clé dans .streamlit/secrets.toml sous le nom GROQ_API_KEY
+# Si Mode DYS activé : Police adaptée et gros caractères
+if st.session_state.mode_dys:
+    st.markdown("""
+    <style>
+    html, body, [class*="css"] {
+        font-family: 'Verdana', sans-serif !important;
+        font-size: 18px !important;
+        line-height: 1.8 !important;
+        letter-spacing: 0.5px !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+# J'ai SUPPRIMÉ le code qui cachait le menu du haut pour que vous puissiez partager l'appli.
+
+st.title("♾️ Agence PRO'AGORA")
+st.caption("Simulation Professionnelle Gamifiée")
+
+# --- 3. CONNEXION ---
 try:
     api_key = st.secrets["GROQ_API_KEY"]
     client = Groq(api_key=api_key)
-except Exception as e:
-    st.error("🚨 ERREUR : Clé API introuvable. Vérifie ton fichier 'secrets.toml'.")
+except:
+    st.error("⚠️ Clé API manquante.")
     st.stop()
 
-# --- 3. LE CERVEAU (PROMPT V9 - VERSION PÉDAGOGIQUE MAXIMALE) ---
-SYSTEM_PROMPT = """
-### 1. IDENTITÉ ET RÔLE
-Tu es le "Superviseur Pro’AGoRA", responsable opérationnel d’une agence virtuelle de services administratifs.
-Tu encadres un élève ("Opérateur Junior") de 1ère Bac Pro AGOrA.
-Ton objectif : Lui faire réaliser des missions professionnelles en lui fournissant la matière première, mais en exigeant une rigueur administrative totale sur la forme et la structure.
+# --- 4. FONCTIONS UTILITAIRES ---
+def extract_text_from_file(uploaded_file):
+    text = ""
+    try:
+        if uploaded_file.name.endswith(".docx"):
+            doc = docx.Document(uploaded_file)
+            for para in doc.paragraphs: text += para.text + "\n"
+        elif uploaded_file.name.endswith(".pdf"):
+            reader = PdfReader(uploaded_file)
+            for page in reader.pages: text += page.extract_text() + "\n"
+        elif uploaded_file.name.endswith(".txt"):
+            text = uploaded_file.read().decode("utf-8")
+        return text
+    except Exception as e: return f"Erreur lecture : {e}"
 
-### 2. RÈGLES DE POSTURE (CRITIQUES)
-- **TON :** Professionnel, exigeant, vouvoiement. Jamais infantilisant.
-- **MÉTHODE :** Une étape à la fois. Ne valide jamais si le travail est incomplet.
-- **INCLUSIVITÉ (OBLIGATOIRE) :** Dans tes scénarios, reflète la diversité de la société française (origines des noms/prénoms, parité H/F). Évite les stéréotypes.
-- **FOURNISSEUR DE RESSOURCES (VITAL) :** L'élève est gestionnaire, pas technicien. Pour chaque mission, tu dois LUI DONNER les informations techniques brutes (horaires, compétences métier, prix, dates). Il ne doit pas les inventer, il doit les traiter.
-- **HONNÊTETÉ :** Si tu ne sais pas, dis-le. Ne jamais inventer de fausses lois.
+def clean_text_for_audio(text):
+    text = re.sub(r'[\*_]{1,3}', '', text) # Enlève gras/italique
+    text = re.sub(r'#+', '', text) # Enlève titres
+    text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', text) # Enlève liens
+    text = re.sub(r'^\s*-\s+', '', text, flags=re.MULTILINE) # Enlève puces
+    return text
 
-### 3. ⛔ GARDE-FOUS ET SÉCURITÉ
-1. **ANTI-TRICHE :** Ne rédige jamais le document final à la place de l'élève.
-2. **RGPD :** Interdis formellement l'usage de données réelles (noms d'élèves, numéros).
-3. **CADRE :** Recadre tout langage familier ou hors-sujet.
+# --- 5. STRUCTURE DU LIVRE (TITRES PROPRES) ---
+DB_PREMIERE = {
+    "SP1 : GESTION DES ESPACES DE TRAVAIL": {
+        "Aménagement des espaces": "COMPÉTENCE : Proposer un aménagement de bureau ergonomique et choisir le mobilier adapté.",
+        "Environnement numérique": "COMPÉTENCE : Lister le matériel informatique, les logiciels et vérifier les règles RGPD.",
+        "Ressources partagées": "COMPÉTENCE : Gérer le stock de fournitures (commandes/partage) et les réservations (salles/véhicules).",
+        "Partage de l'information": "COMPÉTENCE : Améliorer la communication interne (Note de service, Outils collaboratifs, Agenda)."
+    },
+    "SP2 : GESTION DES RELATIONS PARTENAIRES": {
+        "Lancement produit / Vente": "COMPÉTENCE : Planifier des tâches (Planigramme), Négocier un prix de vente, Communication commerciale.",
+        "Organisation de réunions": "COMPÉTENCE : Convoquer les participants, Réserver la salle, Préparer l'ordre du jour, Rédiger le Compte-Rendu.",
+        "Organisation déplacement": "COMPÉTENCE : Réserver un déplacement (Train/Avion/Hôtel) avec budget contraint. Établir l'Ordre de Mission."
+    },
+    "SP3 : GESTION DES RESSOURCES HUMAINES": {
+        "Recrutement": "COMPÉTENCE : Définir le Profil de poste, Rédiger l'annonce d'embauche, Trier des CV.",
+        "Intégration du personnel": "COMPÉTENCE : Préparer l'arrivée (matériel, badges), Créer le livret d'accueil, Organiser l'accueil.",
+        "Dossiers du personnel": "COMPÉTENCE : Rédiger un Contrat de travail, Mettre à jour le Registre Unique du Personnel, Faire un Avenant."
+    },
+    "SCÉNARIOS TRANSVERSAUX": {
+        "Réorganisation complète": "COMPÉTENCE : Projet global de déménagement ou de réaménagement des services.",
+        "Campagne de Recrutement": "COMPÉTENCE : Projet global de recrutement (de l'annonce à l'intégration)."
+    }
+}
 
-### 4. MENU DE DÉMARRAGE
-Si l'élève te salue, affiche ce menu :
-"Bonjour Opérateur. Bienvenue à l'Agence Pro’AGoRA.
-Rappel de sécurité : Utilise uniquement des données fictives pour cet exercice.
-Sur quel dossier souhaites-tu travailler ?
+DB_SECONDE = {
+    "Révisions 2nde": {
+        "Accueil physique et téléphonique": "COMPÉTENCE : Accueil physique et téléphonique (Filtrage, Prise de message).",
+        "Gestion du courrier": "COMPÉTENCE : Tri du courrier (Arrivée/Départ) et Enregistrement.",
+        "Classement et Archivage": "COMPÉTENCE : Organisation de l'arborescence numérique."
+    }
+}
 
-📂 **A. RECRUTEMENT** (Fiche de poste, Annonce, Sélection, Intégration)
-✈️ **B. DÉPLACEMENTS** (Comparatif, Réservation, Feuille de route)
-🛒 **C. ACHATS** (Devis, Comparatif, Commande)
-💶 **D. VENTES & FACTURATION** (Devis client, Facture, Relance)
-🗂️ **E. ORGANISATION** (Classement, Archivage, Qualité)
+# --- 6. GAMIFICATION ---
+GRADES = {
+    0: "👶 Stagiaire",
+    100: "👦 Assistant(e) Junior",
+    300: "👨‍💼 Assistant(e) Confirmé(e)",
+    600: "👩‍💻 Responsable de Pôle",
+    1000: "👑 Assistant(e) de Direction"
+}
 
-Indique la lettre de la mission."
+if "xp" not in st.session_state: st.session_state.xp = 0
 
-### 5. DÉROULEMENT DES MODULES (SCÉNARIOS ALÉATOIRES)
-*Dès le choix de l'élève, lance le module correspondant en choisissant un scénario au hasard et en DONNANT IMMÉDIATEMENT LES DONNÉES BRUTES.*
+def get_grade(xp):
+    current_grade = "Stagiaire"
+    for palier, titre in GRADES.items():
+        if xp >= palier:
+            current_grade = titre
+    return current_grade
 
-#### MODULE A : RECRUTEMENT (4 ÉTAPES)
-*Scénarios possibles :*
-* **A1 Bâtiment :** "Besoin Assistant Gestion chez Bati-Rénov. Tâches : Devis Excel, téléphone difficile, factures. Profil : Bac Pro, rigoureux, calme. 35h."
-* **A2 Événementiel :** "Besoin Hôte/Hôtesse chez Festiv'Art. Tâches : Accueil VIP, vestiaire. Profil : Anglais B1, excellente présentation, souriant. CDD 1 mois."
-* **A3 Mairie :** "Besoin Agent Administratif Service Jeunesse. Tâches : Inscriptions été, saisie dossiers, archivage. Compétences : Word, confidentialité absolue. Débutant ok."
-* **A4 Médical :** "Besoin Secrétaire Médicale Centre Tilleuls. Tâches : Accueil, Frappe comptes-rendus, RDV Doctolib. Compétences : Vocabulaire médical, orthographe, empathie."
-* **A5 Transport :** "Besoin Agent Exploitation Trans-Express. Tâches : Gérer chauffeurs, litiges livraisons. Profil : Géographie locale, résistance au stress, autorité."
-* **A6 Immo :** "Besoin Assistant Commercial Immo-Sud. Tâches : Rédaction annonces web, tenue agenda. Compétences : Aisance numérique, plume vendeuse."
+def ajouter_xp():
+    st.session_state.xp += 50
+    st.balloons()
+    st.toast("Bravo ! +50 XP 🚀", icon="⭐")
 
-**Déroulement :**
-1. **Définition :** Donne les données brutes. Demande Fiche de Poste + Profil.
-2. **Diffusion :** Demande Annonce + Choix canaux.
-3. **Sélection :** Génère 3 CV fictifs diversifiés (Solide, Manquant, Négligé). Demande tri justifié.
-4. **Intégration :** Demande plan du Livret d'Accueil.
+# --- 7. CERVEAU (PROMPT) ---
+def get_system_prompt(simplified_mode):
+    base_prompt = """
+    TU ES : Le Superviseur de l'Agence PRO'AGORA.
+    RÈGLES DU JEU :
+    1. L'élève choisit une mission. TU DOIS INVENTER un scénario d'entreprise aléatoire (Nom, Chiffres, Contexte) immédiatement.
+    2. Fournis les données brutes dès le début.
+    3. Ne fais jamais le travail à la place de l'élève.
+    4. À la fin, génère un BILAN D'ÉVALUATION (Points forts / Points à améliorer).
+    """
+    if simplified_mode:
+        base_prompt += """
+        ⚠️ MODE ACCESSIBILITÉ : Fais des phrases courtes. Utilise des listes à puces. Mets les mots clés en GRAS.
+        """
+    return base_prompt
 
-#### MODULE B : DÉPLACEMENTS (4 ÉTAPES)
-*Donne toujours : Ville départ/arrivée, Dates, Horaires, Budget, Noms voyageurs.*
-1. **Analyse :** L'élève reformule les contraintes.
-2. **Recherche :** Génère 3 options transport fictives. Demande Comparatif.
-3. **Réservation :** Demande liste infos pour Ordre de Mission.
-4. **Feuille de Route :** Demande document final.
-
-#### MODULE C : ACHATS (3 ÉTAPES)
-*Donne toujours : Besoin précis (ex: 5 PC, 15 pouces, max 600€) et urgence.*
-1. **Devis :** Demande mail demande de prix.
-2. **Comparatif :** Génère 3 offres fournisseurs fictives. Demande Tableau Comparatif.
-3. **Commande :** Validation mentions Bon de Commande.
-
-#### MODULE D : VENTES (3 ÉTAPES)
-*Donne toujours : Client, Produits, conditions (Remise, TVA).*
-1. **Devis Client :** Demande devis (Calculs HT/TTC/TVA obligatoires).
-2. **Facture :** Demande facture (Simule une erreur client à détecter).
-3. **Relance :** Demande mail relance impayé.
-
-#### MODULE E : ORGANISATION (2 ÉTAPES)
-*Scénarios : Classement numérique, Archivage papier, ou Réclamation.*
-1. **Action :** Demande arborescence, tri ou réponse écrite.
-2. **Qualité :** Demande questionnaire satisfaction ou procédure.
-
-### 6. RAPPORT FINAL (POUR LE PROFESSEUR)
-À la fin, génère systématiquement ce bilan pour l'entretien d'explicitation :
-
---- ✂️ À COPIER-COLLER POUR L'ENTRETIEN AVEC LE PROFESSEUR ✂️ ---
-**BILAN DE LA MISSION [Nom]**
-**Scénario traité :** [Nom]
-**Niveau observé :** [Junior / Opérationnel / Confirmé]
-
-**1️⃣ CE QUI A ÉTÉ FAIT**
-* [Résumé factuel des productions validées]
-
-**2️⃣ ANALYSE DU PROCESSUS**
-* *Points de blocage :* [L'élève a-t-il demandé de l'aide ?]
-* *Qualité du travail :* [Respect des consignes, orthographe, ton]
-
-**3️⃣ QUESTIONS POUR L'ENTRETIEN (MÉTHODE VERMERSCH)**
-*Monsieur/Madame le Professeur, posez ces questions à l'élève :*
-* *Prise d'information :* "Quand tu as lu les notes du chef, quelle info as-tu traitée en premier ?"
-* *Décision :* "Pourquoi as-tu choisi cette option plutôt que l'autre ?"
-* *Auto-évaluation :* "Si tu devais refaire ce document, que changerais-tu ?"
---------------------------------------------------------------
-"""
-
-# --- 4. GESTION DES LOGS ET DE L'HISTORIQUE ---
-if "conversation_log" not in st.session_state:
-    st.session_state.conversation_log = []
-
-if "messages" not in st.session_state:
-    # Message d'accueil initial (Copie exacte du Menu du Prompt pour cohérence)
-    welcome_text = """Bonjour Opérateur. Bienvenue à l'Agence Pro’AGoRA.
-Rappel de sécurité : Utilise uniquement des données fictives pour cet exercice.
-Sur quel dossier souhaites-tu travailler ?
-
-📂 **A. RECRUTEMENT** (Fiche de poste, Annonce, Sélection, Intégration)
-✈️ **B. DÉPLACEMENTS** (Comparatif, Réservation, Feuille de route)
-🛒 **C. ACHATS** (Devis, Comparatif, Commande)
-💶 **D. VENTES & FACTURATION** (Devis client, Facture, Relance)
-🗂️ **E. ORGANISATION** (Classement, Archivage, Qualité)
-
-Indique la lettre de la mission pour commencer."""
-    st.session_state.messages = [{"role": "assistant", "content": welcome_text}]
+# --- 8. LOGS ---
+if "conversation_log" not in st.session_state: st.session_state.conversation_log = []
+if "messages" not in st.session_state: st.session_state.messages = []
 
 def save_log(student_id, role, content):
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     st.session_state.conversation_log.append({
-        "Heure": timestamp,
+        "Heure": ts,
         "Eleve": student_id,
         "Role": role,
-        "Message": content
+        "Message": content,
+        "XP_Sauvegarde": st.session_state.xp
     })
 
-# --- 5. BARRE LATÉRALE (ADMINISTRATION) ---
+def lancer_mission():
+    base = DB_PREMIERE if st.session_state.niveau_select == "1ère (Livre Foucher)" else DB_SECONDE
+    theme = st.session_state.theme_select
+    dossier = st.session_state.dossier_select
+    competence = base[theme][dossier]
+    
+    st.session_state.messages = []
+    prompt_demarrage = f"Mission : '{dossier}' ({competence}). Invente le scénario et donne les consignes."
+    
+    try:
+        msgs = [{"role": "system", "content": get_system_prompt(st.session_state.mode_simple)}]
+        msgs.append({"role": "user", "content": prompt_demarrage})
+        
+        completion = client.chat.completions.create(messages=msgs, model="llama-3.3-70b-versatile", temperature=0.8)
+        intro_bot = completion.choices[0].message.content
+        st.session_state.messages.append({"role": "assistant", "content": intro_bot})
+    except Exception as e:
+        st.error(f"Erreur IA : {e}")
+
+# --- 9. INTERFACE SIDEBAR ---
 with st.sidebar:
-    st.header("Paramètres Élève")
-    student_id = st.text_input("Ton Prénom (ou Pseudo) :", placeholder="Ex: Alex_T")
-    st.info("⚠️ Règle d'or : N'utilise jamais ton vrai nom de famille ni de vraies données personnelles dans le chat.")
+    st.header("👤 Profil")
+    student_id = st.text_input("Prénom :", key="prenom_eleve")
     
-    st.divider()
+    # Gamification
+    grade_actuel = get_grade(st.session_state.xp)
+    st.metric("Niveau & XP", value=f"{st.session_state.xp} XP", delta=grade_actuel)
+    progress_val = min(st.session_state.xp / 1000, 1.0)
+    st.progress(progress_val)
     
-    st.subheader("Outils Professeur")
-    # Bouton de téléchargement des logs (pour toi)
+    st.markdown("---")
+    st.header("♿ Accessibilité")
+    st.session_state.mode_dys = st.checkbox("👁️ DYS (Gros caractères)")
+    st.session_state.mode_simple = st.checkbox("🧠 Consignes Simplifiées")
+    st.session_state.mode_audio = st.checkbox("🔊 Lecture Audio")
+
+    st.markdown("---")
+    st.header("🗂️ Missions")
+    niveau = st.radio("Livre :", ["1ère (Livre Foucher)", "2nde (Révisions)"], key="niveau_select")
+    base_active = DB_PREMIERE if niveau == "1ère (Livre Foucher)" else DB_SECONDE
+    theme = st.selectbox("Thème :", list(base_active.keys()), key="theme_select")
+    dossier = st.selectbox("Mission :", list(base_active[theme].keys()), key="dossier_select")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.button("🚀 LANCER", type="primary", on_click=lancer_mission)
+    with col2:
+        st.button("✅ FINIR", on_click=ajouter_xp)
+
+    st.markdown("---")
+    # Sauvegarde
     if st.session_state.conversation_log:
         df = pd.DataFrame(st.session_state.conversation_log)
         csv = df.to_csv(index=False, sep=';').encode('utf-8-sig')
-        st.download_button(
-            label="📥 Télécharger le suivi de session (CSV)",
-            data=csv,
-            file_name=f"suivi_mission_{student_id if student_id else 'anonyme'}.csv",
-            mime="text/csv"
-        )
+        st.download_button("📥 Télécharger (CSV)", csv, "suivi_1agora.csv", "text/csv")
     
-    # Bouton pour recommencer à zéro
-    if st.button("🗑️ Effacer la conversation"):
-        st.session_state.messages = [{"role": "assistant", "content": welcome_text}]
-        st.rerun()
-
-# --- 6. INTERFACE DE CHAT ---
-# Afficher l'historique des messages
-for msg in st.session_state.messages:
-    # On distingue visuellement l'assistant de l'élève
-    avatar = "🤖" if msg["role"] == "assistant" else "🧑‍💻"
-    with st.chat_message(msg["role"], avatar=avatar):
-        st.markdown(msg["content"])
-
-# Zone de saisie élève
-if prompt := st.chat_input("Écris ta réponse ici..."):
-    
-    # Vérification : L'élève a-t-il mis son pseudo ?
-    if not student_id:
-        st.toast("⚠️ Entre ton pseudo dans le menu à gauche pour commencer !", icon="🚨")
-    else:
-        # 1. Afficher le message de l'élève
-        st.chat_message("user", avatar="🧑‍💻").write(prompt)
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        save_log(student_id, "Eleve", prompt)
-
-        # 2. Appel à l'IA (Groq / Llama 3)
+    # Reprise
+    uploaded_csv = st.file_uploader("Reprendre (CSV)", type=['csv'])
+    if uploaded_csv and st.button("🔄 Restaurer"):
         try:
-            # Préparation du contexte pour l'IA
-            messages_for_api = [{"role": "system", "content": SYSTEM_PROMPT}]
-            # On n'envoie que les 10 derniers échanges pour garder de la mémoire sans exploser le contexte
-            for m in st.session_state.messages[-20:]:
-                messages_for_api.append({"role": m["role"], "content": m["content"]})
+            df_hist = pd.read_csv(uploaded_csv, sep=';')
+            st.session_state.messages = []
+            st.session_state.conversation_log = []
+            if 'XP_Sauvegarde' in df_hist.columns:
+                st.session_state.xp = int(df_hist['XP_Sauvegarde'].iloc[-1])
+            for _, row in df_hist.iterrows():
+                role_chat = "user" if row['Role'] == "Eleve" else "assistant"
+                st.session_state.messages.append({"role": role_chat, "content": row['Message']})
+                save_log(row.get('Eleve', student_id), row['Role'], row['Message'])
+            st.success(f"Restauré ! Niveau : {st.session_state.xp} XP")
+            st.rerun()
+        except: st.error("Fichier invalide.")
 
-            with st.spinner("Le Superviseur analyse ta réponse..."):
-                chat_completion = client.chat.completions.create(
-                    messages=messages_for_api,
-                    model="llama-3.3-70b-versatile", # Modèle très performant et rapide
-                    temperature=0.6, # Température modérée pour rester pro mais varié
-                    max_tokens=1500,
-                )
-            
-            bot_reply = chat_completion.choices[0].message.content
-            
-            # 3. Afficher la réponse de l'IA
-            with st.chat_message("assistant", avatar="🤖"):
-                st.markdown(bot_reply)
-            
-            st.session_state.messages.append({"role": "assistant", "content": bot_reply})
-            save_log(student_id, "Superviseur", bot_reply)
-            
-        except Exception as e:
-            st.error(f"Une erreur technique est survenue : {e}")
+# --- 10. CHAT & AUDIO ---
+if not st.session_state.messages:
+    st.info("👋 Bonjour ! Configure tes options à gauche et lance une mission.")
+else:
+    for i, msg in enumerate(st.session_state.messages):
+        st.chat_message(msg["role"]).write(msg["content"])
+        
+        # LECTEUR AUDIO
+        if st.session_state.mode_audio and msg["role"] == "assistant":
+            if f"audio_{i}" not in st.session_state:
+                try:
+                    clean_text = clean_text_for_audio(msg["content"])
+                    tts = gTTS(text=clean_text, lang='fr')
+                    audio_buffer = io.BytesIO()
+                    tts.write_to_fp(audio_buffer)
+                    st.session_state[f"audio_{i}"] = audio_buffer
+                except: pass
+            if f"audio_{i}" in st.session_state:
+                st.audio(st.session_state[f"audio_{i}"], format="audio/mp3")
+
+    # DÉPÔT FICHIER
+    with st.expander("📎 Joindre un fichier (Word/PDF)"):
+        uploaded_doc = st.file_uploader("Fichier à corriger", type=['docx', 'pdf', 'txt'], key="doc_upload")
+        if uploaded_doc and st.button("Envoyer fichier"):
+            content = extract_text_from_file(uploaded_doc)
+            user_msg = f"📄 Fichier **{uploaded_doc.name}** : {content}"
+            st.chat_message("user").write(f"📄 *Fichier envoyé : {uploaded_doc.name}*")
+            st.session_state.messages.append({"role": "user", "content": user_msg})
+            save_log(student_id, "Eleve", f"[FICHIER] {uploaded_doc.name}")
+            try:
+                msgs = [{"role": "system", "content": get_system_prompt(st.session_state.mode_simple)}] + [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]
+                completion = client.chat.completions.create(messages=msgs, model="llama-3.3-70b-versatile", temperature=0.7)
+                rep = completion.choices[0].message.content
+                st.chat_message("assistant").write(rep)
+                st.session_state.messages.append({"role": "assistant", "content": rep})
+                save_log(student_id, "Superviseur", rep)
+                st.rerun()
+            except Exception as e: st.error(f"Erreur : {e}")
+
+    # SAISIE
+    if prompt := st.chat_input("Votre réponse..."):
+        if not student_id: st.warning("⚠️ Prénom requis !")
+        else:
+            st.chat_message("user").write(prompt)
+            st.session_state.messages.append({"role": "user", "content": prompt})
+            save_log(student_id, "Eleve", prompt)
+            try:
+                msgs = [{"role": "system", "content": get_system_prompt(st.session_state.mode_simple)}] + [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]
+                completion = client.chat.completions.create(messages=msgs, model="llama-3.3-70b-versatile", temperature=0.7)
+                rep = completion.choices[0].message.content
+                st.chat_message("assistant").write(rep)
+                st.session_state.messages.append({"role": "assistant", "content": rep})
+                save_log(student_id, "Superviseur", rep)
+                st.rerun()
+            except Exception as e: st.error(f"Erreur : {e}")
