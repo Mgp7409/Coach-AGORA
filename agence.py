@@ -5,14 +5,19 @@ from groq import Groq
 from datetime import datetime
 
 # --- 1. CONFIGURATION DE LA PAGE ---
-st.set_page_config(page_title="Agence Pro’AGoRA", page_icon="🏢")
+# Ajout de initial_sidebar_state="expanded"
+st.set_page_config(
+    page_title="Agence Pro’AGoRA", 
+    page_icon="🏢",
+    initial_sidebar_state="expanded"
+)
 
-# Masquer le menu Streamlit
+# --- CORRECTION CSS ---
+# On cache le footer, mais on force l'affichage du header (bouton partage)
 hide_menu_style = """
     <style>
-    #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    header {visibility: hidden;}
+    header {visibility: visible !important;}
     </style>
     """
 st.markdown(hide_menu_style, unsafe_allow_html=True)
