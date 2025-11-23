@@ -7,7 +7,7 @@ from datetime import datetime
 # --- 1. CONFIGURATION DE LA PAGE ---
 st.set_page_config(page_title="Agence Pro’AGoRA", page_icon="🏢")
 
-# Masquer le menu pour éviter les effacements accidentels
+# Masquer le menu Streamlit
 hide_menu_style = """
     <style>
     #MainMenu {visibility: hidden;}
@@ -30,9 +30,8 @@ except:
 # --- 3. LE CERVEAU (PROMPT) ---
 SYSTEM_PROMPT = """
 ### 1. IDENTITÉ ET RÔLE
-Tu es le "Superviseur Pro’AGoRA", responsable opérationnel d’une agence virtuelle de services administratifs.
-Tu encadres un élève ("Opérateur Junior") de 1ère Bac Pro AGOrA.
-Ton objectif : Lui faire réaliser des missions professionnelles en lui fournissant la matière première.
+Tu es le "Superviseur Pro’AGoRA", responsable opérationnel d’une agence virtuelle.
+Tu encadres un élève de 1ère Bac Pro AGOrA.
 
 ### 2. RÈGLES DE POSTURE
 - **TON :** Professionnel, exigeant, vouvoiement.
@@ -44,7 +43,6 @@ Ton objectif : Lui faire réaliser des missions professionnelles en lui fourniss
 2. Pas de données réelles (RGPD).
 
 ### 4. MENU DE DÉMARRAGE
-Propose ce menu :
 "Bonjour Opérateur. Bienvenue à l'Agence Pro’AGoRA.
 Rappel : Utilise uniquement des données fictives.
 Sur quel dossier souhaites-tu travailler ?
@@ -61,7 +59,6 @@ Indique la lettre de la mission."
 Choisis un scénario au hasard et DONNE LES DONNÉES BRUTES.
 
 #### MODULE A : RECRUTEMENT
-Scénarios : Bâtiment, Événementiel, Mairie, Médical, Transport, Immo.
 1. Définition : Donne données brutes. Demande Fiche de Poste + Profil.
 2. Diffusion : Demande Annonce + Canaux.
 3. Sélection : Génère 3 CV fictifs. Demande tri.
@@ -103,40 +100,12 @@ Génère ce bilan :
 --------------------------------------------------------------
 """
 
-# --- 4. GESTION DES LOGS (POUR LE CSV) ---
+# --- 4. GESTION DES LOGS ET MESSAGES ---
 if "conversation_log" not in st.session_state:
     st.session_state.conversation_log = []
 
-def save_log(student_id, role, content):
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    st.session_state.conversation_log.append({
-        "Heure": timestamp,
-        "Eleve": student_id,
-        "Role": role,
-        "Message": content
-    })
-
-# --- 5. INTERFACE (AVEC LE BOUTON CSV) ---
-with st.sidebar:
-    st.header("Agence Pro’AGoRA")
-    student_id = st.text_input("Identifiant Opérateur :")
-    st.info("⚠️ N'utilise jamais ton vrai nom.")
-    
-    # <--- C'EST ICI QUE SE TROUVE LE BOUTON DE TÉLÉCHARGEMENT
-    if st.session_state.conversation_log:
-        df = pd.DataFrame(st.session_state.conversation_log)
-        # On force l'encodage utf-8-sig pour que Excel lise bien les accents
-        csv = df.to_csv(index=False, sep=';').encode('utf-8-sig')
-        st.download_button(
-            label="📥 Télécharger le suivi (CSV)",
-            data=csv,
-            file_name="suivi_agence.csv",
-            mime="text/csv"
-        )
-
-# --- 6. CHAT ---
-if "messages" not in st.session_state:
-    welcome_text = """Bonjour Opérateur. Bienvenue à l'Agence Pro’AGoRA.
+# Message d'accueil par défaut
+welcome_text = """Bonjour Opérateur. Bienvenue à l'Agence Pro’AGoRA.
 Rappel de sécurité : Utilise uniquement des données fictives pour cet exercice.
 Sur quel dossier souhaites-tu travailler ?
 
@@ -147,8 +116,84 @@ Sur quel dossier souhaites-tu travailler ?
 🗂️ **E. ORGANISATION** (Classement, Archivage, Qualité)
 
 Indique la lettre de la mission."""
+
+if "messages" not in st.session_state:
     st.session_state.messages = [{"role": "assistant", "content": welcome_text}]
 
+def save_log(student_id, role, content):
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    st.session_state.conversation_log.append({
+        "Heure": timestamp,
+        "Eleve": student_id,
+        "Role": role,
+        "Message": content
+    })
+
+# --- 5. INTERFACE CÔTÉ GAUCHE (SIDEBAR) ---
+with st.sidebar:
+    st.header("Agence Pro’AGoRA")
+    student_id = st.text_input("Identifiant Opérateur :")
+    st.info("⚠️ N'utilise jamais ton vrai nom.")
+    st.markdown("---")
+
+    # --- ZONE DE SAUVEGARDE (DOWNLOAD) ---
+    st.subheader("💾 Sauvegarder")
+    if st.session_state.conversation_log:
+        df = pd.DataFrame(st.session_state.conversation_log)
+        csv = df.to_csv(index=False, sep=';').encode('utf-8-sig')
+        st.download_button("📥 Télécharger l'avancement (CSV)", csv, "suivi_agence.csv", "text/csv")
+    else:
+        st.write("Commencez à discuter pour sauvegarder.")
+
+    st.markdown("---")
+
+    # --- ZONE DE REPRISE (UPLOAD) ---
+    st.subheader("📂 Reprendre un travail")
+    uploaded_file = st.file_uploader("Charger un ancien CSV pour continuer", type=['csv'])
+    
+    if uploaded_file is not None:
+        try:
+            # Lecture du fichier
+            df_history = pd.read_csv(uploaded_file, sep=';')
+            
+            # Vérification que c'est le bon format
+            if 'Role' in df_history.columns and 'Message' in df_history.columns:
+                if st.button("🔄 Restaurer la conversation"):
+                    # 1. On vide la mémoire actuelle
+                    st.session_state.messages = []
+                    st.session_state.conversation_log = []
+                    
+                    # 2. On remplit avec l'historique
+                    # On remet le message d'accueil si absent
+                    st.session_state.messages.append({"role": "assistant", "content": welcome_text})
+
+                    for index, row in df_history.iterrows():
+                        role_csv = row['Role'] # "Eleve" ou "Superviseur"
+                        content = row['Message']
+                        
+                        # Conversion pour l'affichage chat
+                        role_chat = "user" if role_csv == "Eleve" else "assistant"
+                        
+                        # On évite de doublonner le message d'accueil s'il est dans le CSV
+                        if content != welcome_text:
+                            st.session_state.messages.append({"role": role_chat, "content": content})
+                            
+                            # On remplit aussi le log pour la future sauvegarde
+                            st.session_state.conversation_log.append({
+                                "Heure": row.get('Heure', datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+                                "Eleve": row.get('Eleve', student_id),
+                                "Role": role_csv,
+                                "Message": content
+                            })
+                    
+                    st.success("Conversation restaurée ! Vous pouvez continuer.")
+                    st.rerun() # Recharge la page pour afficher les messages
+            else:
+                st.error("Format de fichier invalide (colonnes manquantes).")
+        except Exception as e:
+            st.error(f"Erreur lecture : {e}")
+
+# --- 6. CHAT (AFFICHAGE) ---
 # Affichage historique
 for msg in st.session_state.messages:
     st.chat_message(msg["role"]).write(msg["content"])
@@ -180,6 +225,7 @@ if prompt := st.chat_input("Votre réponse..."):
             st.chat_message("assistant").write(bot_reply)
             st.session_state.messages.append({"role": "assistant", "content": bot_reply})
             save_log(student_id, "Superviseur", bot_reply)
+            st.rerun() # Force le rafraichissement pour le bouton download
             
         except Exception as e:
             st.error(f"Erreur : {e}")
