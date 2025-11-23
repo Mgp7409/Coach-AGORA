@@ -4,17 +4,21 @@ from groq import Groq
 from datetime import datetime
 from gtts import gTTS
 import io
-import re  # Nouveau module pour nettoyer le texte
+import re
+import docx
+from pypdf import PdfReader
 
 # --- 1. CONFIGURATION ---
-st.set_page_config(page_title="1AGORA - Inclusive", page_icon="🏢")
+# J'ai ajouté initial_sidebar_state="expanded" pour forcer le volet à s'ouvrir
+st.set_page_config(page_title="1AGORA", page_icon="🏢", initial_sidebar_state="expanded")
 
-# --- 2. GESTION DE LA DIFFÉRENCIATION (CSS DYNAMIQUE) ---
+# --- 2. GESTION DU STYLE (ACCESSIBILITÉ) ---
 if "mode_dys" not in st.session_state:
     st.session_state.mode_dys = False
 
+# Si Mode DYS activé : Police adaptée et gros caractères
 if st.session_state.mode_dys:
-    dys_style = """
+    st.markdown("""
     <style>
     html, body, [class*="css"] {
         font-family: 'Verdana', sans-serif !important;
@@ -23,13 +27,12 @@ if st.session_state.mode_dys:
         letter-spacing: 0.5px !important;
     }
     </style>
-    """
-    st.markdown(dys_style, unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
-hide_menu = """<style>#MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}</style>"""
-st.markdown(hide_menu, unsafe_allow_html=True)
+# J'ai SUPPRIMÉ le code qui cachait le menu du haut pour que vous puissiez partager l'appli.
 
 st.title("♾️ Agence PRO'AGORA")
+st.caption("Simulation Professionnelle Gamifiée")
 
 # --- 3. CONNEXION ---
 try:
@@ -39,59 +42,67 @@ except:
     st.error("⚠️ Clé API manquante.")
     st.stop()
 
-# --- 4. FONCTION DE NETTOYAGE AUDIO (NOUVEAU) ---
+# --- 4. FONCTIONS UTILITAIRES ---
+def extract_text_from_file(uploaded_file):
+    text = ""
+    try:
+        if uploaded_file.name.endswith(".docx"):
+            doc = docx.Document(uploaded_file)
+            for para in doc.paragraphs: text += para.text + "\n"
+        elif uploaded_file.name.endswith(".pdf"):
+            reader = PdfReader(uploaded_file)
+            for page in reader.pages: text += page.extract_text() + "\n"
+        elif uploaded_file.name.endswith(".txt"):
+            text = uploaded_file.read().decode("utf-8")
+        return text
+    except Exception as e: return f"Erreur lecture : {e}"
+
 def clean_text_for_audio(text):
-    # Enlève le gras/italique (**mot** -> mot)
-    text = re.sub(r'[\*_]{1,3}', '', text)
-    # Enlève les titres (### Titre -> Titre)
-    text = re.sub(r'#+', '', text)
-    # Enlève les liens [Texte](URL) -> Texte
-    text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', text)
-    # Enlève les puces de liste (- )
-    text = re.sub(r'^\s*-\s+', '', text, flags=re.MULTILINE)
-    # Enlève les sauts de ligne multiples
-    text = re.sub(r'\n+', '. ', text)
+    text = re.sub(r'[\*_]{1,3}', '', text) # Enlève gras/italique
+    text = re.sub(r'#+', '', text) # Enlève titres
+    text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', text) # Enlève liens
+    text = re.sub(r'^\s*-\s+', '', text, flags=re.MULTILINE) # Enlève puces
     return text
 
-# --- 5. STRUCTURE DU LIVRE ---
+# --- 5. STRUCTURE DU LIVRE (TITRES PROPRES) ---
 DB_PREMIERE = {
-    "SP1 : GESTION DES ESPACES": {
-        "Chap 1 : Aménagement": "COMPÉTENCE : Proposer aménagement ergonomique.",
-        "Chap 2 : Environnement numérique": "COMPÉTENCE : Matériel informatique et RGPD.",
-        "Chap 3 : Ressources partagées": "COMPÉTENCE : Stocks fournitures et Réservations.",
-        "Chap 4 : Partage info": "COMPÉTENCE : Com interne et Outils collaboratifs."
+    "SP1 : GESTION DES ESPACES DE TRAVAIL": {
+        "Aménagement des espaces": "COMPÉTENCE : Proposer un aménagement de bureau ergonomique et choisir le mobilier adapté.",
+        "Environnement numérique": "COMPÉTENCE : Lister le matériel informatique, les logiciels et vérifier les règles RGPD.",
+        "Ressources partagées": "COMPÉTENCE : Gérer le stock de fournitures (commandes/partage) et les réservations (salles/véhicules).",
+        "Partage de l'information": "COMPÉTENCE : Améliorer la communication interne (Note de service, Outils collaboratifs, Agenda)."
     },
-    "SP2 : RELATIONS PARTENAIRES": {
-        "Chap 5 : Vente & Produit": "COMPÉTENCE : Planigramme, Négociation, Com commerciale.",
-        "Chap 6 : Réunions": "COMPÉTENCE : Convocation, Ordre du jour, Compte-Rendu.",
-        "Chap 7 : Déplacement": "COMPÉTENCE : Réservation Transport/Hôtel, Ordre de Mission."
+    "SP2 : GESTION DES RELATIONS PARTENAIRES": {
+        "Lancement produit / Vente": "COMPÉTENCE : Planifier des tâches (Planigramme), Négocier un prix de vente, Communication commerciale.",
+        "Organisation de réunions": "COMPÉTENCE : Convoquer les participants, Réserver la salle, Préparer l'ordre du jour, Rédiger le Compte-Rendu.",
+        "Organisation déplacement": "COMPÉTENCE : Réserver un déplacement (Train/Avion/Hôtel) avec budget contraint. Établir l'Ordre de Mission."
     },
-    "SP3 : RESSOURCES HUMAINES": {
-        "Chap 8 : Recrutement": "COMPÉTENCE : Profil de poste, Annonce, Tri CV.",
-        "Chap 9 : Intégration": "COMPÉTENCE : Livret d'accueil, Parcours d'intégration.",
-        "Chap 10 : Admin RH": "COMPÉTENCE : Contrat, Registre personnel, Avenant."
+    "SP3 : GESTION DES RESSOURCES HUMAINES": {
+        "Recrutement": "COMPÉTENCE : Définir le Profil de poste, Rédiger l'annonce d'embauche, Trier des CV.",
+        "Intégration du personnel": "COMPÉTENCE : Préparer l'arrivée (matériel, badges), Créer le livret d'accueil, Organiser l'accueil.",
+        "Dossiers du personnel": "COMPÉTENCE : Rédiger un Contrat de travail, Mettre à jour le Registre Unique du Personnel, Faire un Avenant."
     },
-    "TRANSVERSAL": {
-        "Mission 1 : Réorganisation": "COMPÉTENCE : Projet déménagement.",
-        "Mission 2 : Campagne RH": "COMPÉTENCE : Projet recrutement complet."
+    "SCÉNARIOS TRANSVERSAUX": {
+        "Réorganisation complète": "COMPÉTENCE : Projet global de déménagement ou de réaménagement des services.",
+        "Campagne de Recrutement": "COMPÉTENCE : Projet global de recrutement (de l'annonce à l'intégration)."
     }
 }
 
 DB_SECONDE = {
     "Révisions 2nde": {
-        "Accueil": "COMPÉTENCE : Accueil physique/téléphonique.",
-        "Courrier": "COMPÉTENCE : Tri et Enregistrement.",
-        "Classement": "COMPÉTENCE : Arborescence numérique."
+        "Accueil physique et téléphonique": "COMPÉTENCE : Accueil physique et téléphonique (Filtrage, Prise de message).",
+        "Gestion du courrier": "COMPÉTENCE : Tri du courrier (Arrivée/Départ) et Enregistrement.",
+        "Classement et Archivage": "COMPÉTENCE : Organisation de l'arborescence numérique."
     }
 }
 
-# --- 6. SYSTÈME DE GAMIFICATION ---
+# --- 6. GAMIFICATION ---
 GRADES = {
     0: "👶 Stagiaire",
     100: "👦 Assistant(e) Junior",
     300: "👨‍💼 Assistant(e) Confirmé(e)",
     600: "👩‍💻 Responsable de Pôle",
-    1000: "👑 Assistant(e) du Directeur"
+    1000: "👑 Assistant(e) de Direction"
 }
 
 if "xp" not in st.session_state: st.session_state.xp = 0
@@ -108,26 +119,19 @@ def ajouter_xp():
     st.balloons()
     st.toast("Bravo ! +50 XP 🚀", icon="⭐")
 
-# --- 7. CERVEAU ADAPTATIF ---
+# --- 7. CERVEAU (PROMPT) ---
 def get_system_prompt(simplified_mode):
     base_prompt = """
     TU ES : Le Superviseur de l'Agence PRO'AGORA.
-    RÈGLES :
-    1. Invente un scénario d'entreprise aléatoire (Nom, Chiffres, Contexte) dès le début.
-    2. Donne toutes les données brutes immédiatement.
+    RÈGLES DU JEU :
+    1. L'élève choisit une mission. TU DOIS INVENTER un scénario d'entreprise aléatoire (Nom, Chiffres, Contexte) immédiatement.
+    2. Fournis les données brutes dès le début.
     3. Ne fais jamais le travail à la place de l'élève.
+    4. À la fin, génère un BILAN D'ÉVALUATION (Points forts / Points à améliorer).
     """
     if simplified_mode:
         base_prompt += """
-        ⚠️ MODE ACCESSIBILITÉ ACTIVÉ :
-        - Fais des phrases courtes et simples.
-        - Utilise des listes à puces.
-        - Mets les mots importants en **GRAS**.
-        - Explique les termes compliqués.
-        """
-    else:
-        base_prompt += """
-        POSTURE : Professionnel, vouvoiement, vocabulaire technique précis.
+        ⚠️ MODE ACCESSIBILITÉ : Fais des phrases courtes. Utilise des listes à puces. Mets les mots clés en GRAS.
         """
     return base_prompt
 
@@ -166,9 +170,10 @@ def lancer_mission():
 
 # --- 9. INTERFACE SIDEBAR ---
 with st.sidebar:
-    st.header("👤 Mon Profil")
+    st.header("👤 Profil")
     student_id = st.text_input("Prénom :", key="prenom_eleve")
     
+    # Gamification
     grade_actuel = get_grade(st.session_state.xp)
     st.metric("Niveau & XP", value=f"{st.session_state.xp} XP", delta=grade_actuel)
     progress_val = min(st.session_state.xp / 1000, 1.0)
@@ -176,7 +181,7 @@ with st.sidebar:
     
     st.markdown("---")
     st.header("♿ Accessibilité")
-    st.session_state.mode_dys = st.checkbox("👁️ Affichage DYS (Gros caractères)")
+    st.session_state.mode_dys = st.checkbox("👁️ DYS (Gros caractères)")
     st.session_state.mode_simple = st.checkbox("🧠 Consignes Simplifiées")
     st.session_state.mode_audio = st.checkbox("🔊 Lecture Audio")
 
@@ -194,12 +199,13 @@ with st.sidebar:
         st.button("✅ FINIR", on_click=ajouter_xp)
 
     st.markdown("---")
-    st.subheader("💾 Sauvegarde")
+    # Sauvegarde
     if st.session_state.conversation_log:
         df = pd.DataFrame(st.session_state.conversation_log)
         csv = df.to_csv(index=False, sep=';').encode('utf-8-sig')
         st.download_button("📥 Télécharger (CSV)", csv, "suivi_1agora.csv", "text/csv")
     
+    # Reprise
     uploaded_csv = st.file_uploader("Reprendre (CSV)", type=['csv'])
     if uploaded_csv and st.button("🔄 Restaurer"):
         try:
@@ -207,8 +213,7 @@ with st.sidebar:
             st.session_state.messages = []
             st.session_state.conversation_log = []
             if 'XP_Sauvegarde' in df_hist.columns:
-                last_xp = df_hist['XP_Sauvegarde'].iloc[-1]
-                st.session_state.xp = int(last_xp)
+                st.session_state.xp = int(df_hist['XP_Sauvegarde'].iloc[-1])
             for _, row in df_hist.iterrows():
                 role_chat = "user" if row['Role'] == "Eleve" else "assistant"
                 st.session_state.messages.append({"role": role_chat, "content": row['Message']})
@@ -219,41 +224,54 @@ with st.sidebar:
 
 # --- 10. CHAT & AUDIO ---
 if not st.session_state.messages:
-    st.info("👋 Bonjour ! Configure tes options d'accessibilité à gauche et lance une mission.")
+    st.info("👋 Bonjour ! Configure tes options à gauche et lance une mission.")
 else:
     for i, msg in enumerate(st.session_state.messages):
         st.chat_message(msg["role"]).write(msg["content"])
         
-        # LECTEUR AUDIO AVEC TEXTE NETTOYÉ
+        # LECTEUR AUDIO
         if st.session_state.mode_audio and msg["role"] == "assistant":
             if f"audio_{i}" not in st.session_state:
                 try:
-                    # On nettoie le texte avant de l'envoyer à gTTS
                     clean_text = clean_text_for_audio(msg["content"])
                     tts = gTTS(text=clean_text, lang='fr')
                     audio_buffer = io.BytesIO()
                     tts.write_to_fp(audio_buffer)
                     st.session_state[f"audio_{i}"] = audio_buffer
                 except: pass
-            
             if f"audio_{i}" in st.session_state:
                 st.audio(st.session_state[f"audio_{i}"], format="audio/mp3")
 
+    # DÉPÔT FICHIER
+    with st.expander("📎 Joindre un fichier (Word/PDF)"):
+        uploaded_doc = st.file_uploader("Fichier à corriger", type=['docx', 'pdf', 'txt'], key="doc_upload")
+        if uploaded_doc and st.button("Envoyer fichier"):
+            content = extract_text_from_file(uploaded_doc)
+            user_msg = f"📄 Fichier **{uploaded_doc.name}** : {content}"
+            st.chat_message("user").write(f"📄 *Fichier envoyé : {uploaded_doc.name}*")
+            st.session_state.messages.append({"role": "user", "content": user_msg})
+            save_log(student_id, "Eleve", f"[FICHIER] {uploaded_doc.name}")
+            try:
+                msgs = [{"role": "system", "content": get_system_prompt(st.session_state.mode_simple)}] + [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]
+                completion = client.chat.completions.create(messages=msgs, model="llama-3.3-70b-versatile", temperature=0.7)
+                rep = completion.choices[0].message.content
+                st.chat_message("assistant").write(rep)
+                st.session_state.messages.append({"role": "assistant", "content": rep})
+                save_log(student_id, "Superviseur", rep)
+                st.rerun()
+            except Exception as e: st.error(f"Erreur : {e}")
+
+    # SAISIE
     if prompt := st.chat_input("Votre réponse..."):
-        if not student_id:
-            st.warning("⚠️ Prénom requis !")
+        if not student_id: st.warning("⚠️ Prénom requis !")
         else:
             st.chat_message("user").write(prompt)
             st.session_state.messages.append({"role": "user", "content": prompt})
             save_log(student_id, "Eleve", prompt)
-
             try:
-                msgs = [{"role": "system", "content": get_system_prompt(st.session_state.mode_simple)}]
-                msgs += [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]
-                
+                msgs = [{"role": "system", "content": get_system_prompt(st.session_state.mode_simple)}] + [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]
                 completion = client.chat.completions.create(messages=msgs, model="llama-3.3-70b-versatile", temperature=0.7)
                 rep = completion.choices[0].message.content
-                
                 st.chat_message("assistant").write(rep)
                 st.session_state.messages.append({"role": "assistant", "content": rep})
                 save_log(student_id, "Superviseur", rep)
