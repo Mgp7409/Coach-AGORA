@@ -5,12 +5,14 @@ from groq import Groq
 from datetime import datetime
 
 # --- CONFIGURATION ---
-st.set_page_config(page_title="Assistant AGOrA", page_icon="🎓")
-st.title("🎓 Assistant PFMP AGOrA")
+st.set_page_config(page_title="Agence Pro'AGOrA", page_icon="🏢")
+st.title("🏢 Agence Pro'AGOrA - Superviseur Virtuel")
 
-# Récupération de la clé Groq
+# Récupération de la clé Groq (adaptée pour Streamlit Cloud)
 try:
-    api_key = st.secrets["GROQ_API_KEY"]
+    # Utilise os.environ.get pour la compatibilité avec divers environnements
+    # La clé doit être configurée comme variable d'environnement ou dans st.secrets
+    api_key = os.environ.get("GROQ_API_KEY") or st.secrets["GROQ_API_KEY"]
     client = Groq(api_key=api_key)
 except:
     st.error("Clé API manquante. Configurez GROQ_API_KEY dans les Secrets.")
@@ -18,21 +20,24 @@ except:
 
 # --- LE CERVEAU (PROMPT SYSTÈME) ---
 SYSTEM_PROMPT = """
-Tu es un Assistant Pédagogique Interactif (API), strictement dédié à l'entraînement des élèves de Bac Pro AGOrA.
-Ta mission : aider l’élève à structurer sa PFMP sans jamais faire le travail à sa place.
+Tu es le Superviseur Virtuel pour Opérateurs Juniors (Bac Pro) de l'Agence Pro'AGOrA. Ton ton est professionnel, direct, et encourageant (Ton de Coach/Superviseur).
 
-RÈGLES ABSOLUES :
-1. Tu ne rédiges JAMAIS à la place de l'élève.
-2. Tu poses UNE SEULE question à la fois.
-3. Tu attends toujours la réponse avant de continuer.
-4. Ton ton est bienveillant, direct et encourageant (utilise des emojis).
+Ta mission unique : guider l’élève-opérateur à s’exprimer avec ses propres mots, à structurer ses analyses et à progresser par un questionnement professionnel strict, étape par étape, sans jamais faire le travail à sa place.
 
-DÉROULEMENT :
-1. ACCUEIL : Demande l'activité.
-2. CONTEXTE : Demande le Lieu et le Service.
-3. DÉVELOPPEMENT : Demande étapes, outils, procédures.
-4. ANALYSE : Demande justification et initiatives.
-5. CONCLUSION : Synthèse et piste de progrès.
+RÈGLES DE CONDUITE & GARDE-FOUS :
+1. Autonomie Absolue : Tu ne rédiges JAMAIS à la place de l'élève. Tu ne proposes JAMAIS de contenu à recopier, de modèles de phrases, ou de reformulation.
+2. Mode Dialogue Strict : Tu ne poses JAMAERS plus d'une question à la fois. Tu attends toujours la réponse de l'élève avant de passer à l'étape suivante.
+3. Règle d'Or (Sécurité) : Tu rappelles que l'exercice est basé sur des données fictives. Si l'élève mentionne de vraies données personnelles (nom, adresse, entreprise réelle, etc.), tu l'arrêtes poliment mais fermement, en lui rappelant la Règle d'Or.
+4. Gestion des Frictions : Si l'élève fait preuve d'irrespect ou refuse le dialogue, ignore le ton personnel, réaffirme ton rôle professionnel et recentre immédiatement l'élève sur l'objectif académique par une question simple.
+5. Ton & Format : Professionnel, utilise des emojis (🚀, ✅, 💡) et des réponses courtes/ciblées.
+
+DÉROULEMENT SÉQUENCÉ :
+1. ACCUEIL : Afficher le menu de mission.
+2. EXPLORATION FACTUELLE : Demander le lieu d'accueil et le service précis.
+3. DÉVELOPPEMENT : Demander les étapes, outils, logiciels.
+4. ANALYSE : Demander justification (pourquoi l'outil) et initiatives/difficultés.
+5. CONCLUSION : Synthèse, piste de progrès, question sur l'axe d'amélioration.
+6. ENCOURAGEMENT : Proposition d'essai chronométré (moins de 5 minutes).
 """
 
 # --- GESTION DONNÉES ---
@@ -40,6 +45,7 @@ if "conversation_log" not in st.session_state:
     st.session_state.conversation_log = []
 
 def save_log(student_id, role, content):
+    """Saves conversation entries into the session state log."""
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     st.session_state.conversation_log.append({
         "Heure": timestamp,
@@ -48,28 +54,64 @@ def save_log(student_id, role, content):
         "Message": content
     })
 
+# --- CONTENU D'ACCUEIL (Le Menu) ---
+MENU_AGORA = """
+**Bonjour Opérateur. Bienvenue à l'Agence Pro'AGOrA.**
+
+Superviseur Virtuel pour Opérateurs Juniors (Bac Pro). **Rappel de sécurité :** Utilise uniquement des données fictives pour cet exercice.
+
+**Sur quel dossier souhaites-tu travailler ?**
+
+**A. RECRUTEMENT** (Fiche de poste, Annonce, Sélection, Intégration)
+**B. DÉPLACEMENTS** (Comparatif, Réservation, Feuille de route)
+**C. ACHATS** (Devis, Comparatif, Commande)
+**D. VENTES & FACTURATION** (Devis client, Facture, Relance)
+**E. ORGANISATION** (Classement, Archivage, Qualité)
+
+**Indique la lettre de la mission pour commencer.**
+"""
+
 # --- INTERFACE ---
 with st.sidebar:
-    st.header("Espace Professeur")
-    student_id = st.text_input("Identifiant Élève :")
+    st.header("Paramètres Élève")
+    # Ajout du prénom/pseudo pour l'identifiant
+    student_id = st.text_input("Ton Prénom (ou Pseudo) :", placeholder="Ex: Alex_T")
     
+    # Règle d'Or affichée en permanence
+    st.markdown("""
+        <div style="background-color: #fce4e4; padding: 10px; border-radius: 5px; border-left: 5px solid #d32f2f; margin-top: 20px; font-size: small;">
+            ⚠️ **Règle d'Or :** N'utilise jamais ton vrai nom de famille ni de vraies données personnelles dans le chat.
+        </div>
+    """, unsafe_allow_html=True)
+    
+    st.header("Outils Professeur")
+    # Téléchargement du log pour l'analyse
     if st.session_state.conversation_log:
         df = pd.DataFrame(st.session_state.conversation_log)
+        # Utilisation de utf-8-sig pour assurer la compatibilité des accents dans Excel
         csv = df.to_csv(index=False, sep=';').encode('utf-8-sig')
-        st.download_button("📥 Télécharger CSV", csv, "suivi_agora.csv", "text/csv")
+        st.download_button("📥 Télécharger CSV", csv, f"suivi_agora_{datetime.now().strftime('%Y%m%d')}.csv", "text/csv")
+    
+    # Bouton pour effacer l'historique de conversation
+    if st.button("🗑️ Effacer la conversation"):
+        st.session_state.messages = []
+        st.session_state.conversation_log = []
+        st.experimental_rerun()
 
-# --- CHAT ---
+# --- CHAT PRINCIPAL ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
-    # Message d'accueil (ajouté visuellement seulement)
-    st.session_state.messages.append({"role": "assistant", "content": "Bonjour ! Je suis ton coach pour la PFMP. Quelle activité veux-tu préparer ?"})
+    # Affichage du menu d'accueil au début
+    st.session_state.messages.append({"role": "assistant", "content": MENU_AGORA})
 
 for msg in st.session_state.messages:
-    st.chat_message(msg["role"]).write(msg["content"])
+    # Affiche les messages avec le format Streamlit
+    with st.chat_message(msg["role"]):
+        st.write(msg["content"])
 
-if prompt := st.chat_input("Ta réponse..."):
+if prompt := st.chat_input("Écris ta réponse ici..."):
     if not student_id:
-        st.warning("⚠️ Entre ton prénom à gauche !")
+        st.warning("⚠️ Entre ton prénom dans les Paramètres Élève à gauche pour commencer !")
     else:
         # 1. Message Élève
         st.chat_message("user").write(prompt)
@@ -78,17 +120,17 @@ if prompt := st.chat_input("Ta réponse..."):
 
         # 2. Réponse IA (Via Groq)
         try:
-            # On prépare l'historique avec le System Prompt au début
+            # Préparation de l'historique avec le System Prompt au début
             messages_for_api = [{"role": "system", "content": SYSTEM_PROMPT}]
-            # On ajoute la conversation
+            # Ajout de la conversation pour le contexte
             for m in st.session_state.messages:
-                # Groq attend 'assistant' ou 'user', c'est compatible avec notre format
+                # Groq (et autres APIs) utilise 'assistant' ou 'user'
                 messages_for_api.append({"role": m["role"], "content": m["content"]})
 
             chat_completion = client.chat.completions.create(
                 messages=messages_for_api,
-                model="llama-3.3-70b-versatile", # <--- C'est le nouveau modèle puissant et gratuit
-                temperature=0.7,
+                model="llama-3.3-70b-versatile", # Modèle puissant pour le raisonnement
+                temperature=0.6, 
             )
             
             bot_reply = chat_completion.choices[0].message.content
@@ -98,4 +140,4 @@ if prompt := st.chat_input("Ta réponse..."):
             save_log(student_id, "Assistant", bot_reply)
             
         except Exception as e:
-            st.error(f"Erreur connexion : {e}")
+            st.error(f"Erreur de connexion à l'IA : {e}")
