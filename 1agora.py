@@ -26,29 +26,36 @@ except:
     st.error("⚠️ Clé API manquante. Vérifiez les 'Secrets' de Streamlit.")
     st.stop()
 
-# --- 3. BASES DE DONNÉES (SCÉNARIOS) ---
+# --- 3. SCÉNARIOS (CONFORMES AU SOMMAIRE FOUCHER 1ère) ---
+
+# NOTE POUR LE PROF : Vous devrez remplir les "CONTEXTE :" avec les détails des corrigés
+# J'ai mis des exemples génériques pour que ça marche tout de suite.
 
 DB_SECONDE = {
     "Pôle 1 : Gestion Relations Externes": {
-        "Dossier 1 : L'accueil physique et téléphonique": "CONTEXTE : Tu es à l'accueil de l'entreprise 'Azur Buro'. DONNÉES : Appel de M. Dupuis mécontent. MISSION : Fiche de message + Réponse diplomate.",
-        "Dossier 2 : La gestion du courrier": "CONTEXTE : Courrier arrivé (Pub, Chèque, Facture). MISSION : Tableau de tri + Enregistrement chèque.",
-        "Dossier 3 : Le classement et l'archivage": "CONTEXTE : Serveur en désordre. MISSION : Proposer arborescence numérique."
+        "Dossier 1 (2nde) : L'accueil": "CONTEXTE : Accueil chez Azur Buro. MISSION : Filtrer les appels.",
+        "Dossier 2 (2nde) : Le courrier": "CONTEXTE : Tri du courrier. MISSION : Enregistrer le chèque.",
     }
 }
 
 DB_PREMIERE = {
-    "Thème 1 : Suivi des Ventes (Clients)": {
-        "Chapitre 1 : Devis et Commandes": "CONTEXTE : Client 'SARL BATI-SUD'. Demande prix 1000 briques (0.80€) + 50 ciment (12€). Remise 5% > 1000€. TVA 20%. MISSION : Devis + Vérif Bon de Commande.",
-        "Chapitre 2 : Livraison et Facturation": "CONTEXTE : Commande BATI-SUD livrée le 12/10 (BL-98). MISSION : Facture définitive F-2024-089.",
-        "Chapitre 3 : Suivi des Règlements": "CONTEXTE : Facture F-2024-089 échue depuis 40 jours. MISSION : Mail de relance amiable."
+    "Thème 1 : RELATIONS CLIENTS / USAGERS": {
+        "Dossier 1 : Actualiser des dossiers clients": "CONTEXTE : Mise à jour de la base de données. Le client 'Durand' a déménagé. MISSION : Mettre à jour sa fiche signalétique dans le PGI.",
+        "Dossier 2 : Traiter des devis": "CONTEXTE : Demande de prix de M. Martin pour 10 chaises ref C45. Prix unitaire 50€ HT. Remise 10%. MISSION : Établir le devis.",
+        "Dossier 3 : Traiter des commandes": "CONTEXTE : Bon de commande n°502 reçu ce jour. Vérifier la conformité avec le devis D-102. MISSION : Valider la commande.",
+        "Dossier 4 : Traiter livraisons et factures": "CONTEXTE : La livraison a été faite (BL n°88). Tout est conforme. MISSION : Établir la facture définitive.",
+        "Dossier 5 : Suivi règlements et litiges": "CONTEXTE : La facture F-2024 n'est pas payée. Le délai est dépassé de 15 jours. MISSION : Rédiger la relance amiable."
     },
-    "Thème 2 : Suivi des Achats (Fournisseurs)": {
-        "Chapitre 4 : Recherche Fournisseurs": "CONTEXTE : Besoin imprimante laser (Budget 400€). MISSION : Comparatif 3 offres (Canon, HP, Brother).",
-        "Chapitre 5 : Commande et Réception": "CONTEXTE : Brother choisie. Carton abîmé à la livraison. MISSION : Bon de Commande + Réserves."
+    "Thème 2 : RELATIONS FOURNISSEURS": {
+        "Dossier 6 : Mettre à jour dossiers fournisseurs": "CONTEXTE : Le fournisseur 'PapierPlus' change de RIB. MISSION : Mettre à jour la fiche tiers.",
+        "Dossier 7 : Traiter achats et commandes": "CONTEXTE : Besoin de 50 ramettes de papier. Comparer 3 catalogues. MISSION : Rédiger le Bon de Commande.",
+        "Dossier 8 : Traiter livraisons et factures": "CONTEXTE : Réception de la marchandise. Le carton est ouvert. MISSION : Émettre des réserves sur le bon de transport.",
+        "Dossier 9 : Suivi règlements et litiges": "CONTEXTE : Nous avons reçu une facture erronée (prix trop élevé). MISSION : Rédiger un mail de réclamation."
     },
-    "Thème 3 : Trésorerie et Stocks": {
-        "Chapitre 6 : Rapprochement Bancaire": "CONTEXTE : Relevé BNP vs Compte 512. Écarts constatés. MISSION : État de rapprochement.",
-        "Chapitre 7 : Suivi des Stocks": "CONTEXTE : Inventaire papier. Théorique 50, Réel 42. MISSION : Calcul écart + Mise à jour fiche."
+    "Thème 3 : GESTION INTERNE": {
+        "Dossier 10 : Suivre les états des stocks": "CONTEXTE : Inventaire des fournitures. Stock théorique : 100. Stock réel : 98. MISSION : Calculer l'écart et mettre à jour.",
+        "Dossier 11 : Mettre à jour le SI": "CONTEXTE : Nouvelle procédure de sauvegarde des données. MISSION : Rédiger la note de service pour le personnel.",
+        "Dossier 12 : Gérer les espaces administratifs": "CONTEXTE : Réorganisation de l'open space. MISSION : Proposer un plan d'aménagement ergonomique."
     }
 }
 
@@ -56,66 +63,44 @@ DB_PREMIERE = {
 SYSTEM_PROMPT = """
 Tu es le Superviseur PRO'AGORA. Tu encadres un élève de 1ère.
 TON RÔLE : Fournir les données du dossier choisi et guider l'élève.
-1. Donne TOUTES les infos techniques (Prix, Noms) dès le début.
+1. Donne TOUTES les infos techniques (Prix, Noms, Contexte précis) dès le début.
 2. Ne fais jamais le travail à sa place.
 3. Sois pro et exigeant.
 """
 
 # --- 5. GESTION ÉTAT & LOGS ---
-
-# Initialisation sécurisée
-if "conversation_log" not in st.session_state:
-    st.session_state.conversation_log = []
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+if "conversation_log" not in st.session_state: st.session_state.conversation_log = []
+if "messages" not in st.session_state: st.session_state.messages = []
 
 def save_log(student_id, role, content):
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    st.session_state.conversation_log.append({
-        "Heure": timestamp,
-        "Eleve": student_id,
-        "Role": role,
-        "Message": content
-    })
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    st.session_state.conversation_log.append({"Heure": ts, "Eleve": student_id, "Role": role, "Message": content})
 
-# --- FONCTION DE LANCEMENT (La partie corrigée) ---
+# FONCTION DE LANCEMENT (Callback)
 def lancer_mission():
-    # Cette fonction est appelée QUAND on clique sur le bouton
-    # Elle prépare tout AVANT que la page ne se recharge
-    selection_base = DB_PREMIERE if st.session_state.niveau_select == "1ère (Suivi Admin)" else DB_SECONDE
-    contexte = selection_base[st.session_state.theme_select][st.session_state.dossier_select]
+    base = DB_PREMIERE if st.session_state.niveau_select == "1ère (Programme Année)" else DB_SECONDE
+    theme = st.session_state.theme_select
+    dossier = st.session_state.dossier_select
+    contexte = base[theme][dossier]
     
-    msg_depart = f"👋 Bonjour Opérateur. Tu as choisi : **{st.session_state.dossier_select}**.\n\nCONTEXTE :\n{contexte}\n\nQuelle est ta première action ?"
-    
-    st.session_state.messages = [{"role": "assistant", "content": msg_depart}]
-    # On ne met pas de st.rerun() ici, Streamlit le fait tout seul après le clic
+    msg = f"👋 Bonjour Opérateur. Dossier : **{dossier}**.\n\nCONTEXTE :\n{contexte}\n\nQuelle est ta première action ?"
+    st.session_state.messages = [{"role": "assistant", "content": msg}]
 
 # --- 6. INTERFACE ---
 with st.sidebar:
     st.header("🗂️ Navigation 1AGORA")
-    
-    # On utilise des clés (key=...) pour que Streamlit s'y retrouve
     student_id = st.text_input("Votre Prénom :", key="prenom_eleve")
-    
     st.markdown("---")
     
-    # Menus déroulants
-    niveau = st.radio("Module :", ["1ère (Suivi Admin)", "2nde (Révisions)"], key="niveau_select")
+    niveau = st.radio("Module :", ["1ère (Programme Année)", "2nde (Révisions)"], key="niveau_select")
+    base_active = DB_PREMIERE if niveau == "1ère (Programme Année)" else DB_SECONDE
     
-    if niveau == "1ère (Suivi Admin)":
-        base_active = DB_PREMIERE
-    else:
-        base_active = DB_SECONDE
-        
     theme = st.selectbox("Thème :", list(base_active.keys()), key="theme_select")
     dossier = st.selectbox("Dossier :", list(base_active[theme].keys()), key="dossier_select")
     
     st.markdown("---")
-    
-    # LE BOUTON CORRIGÉ : Il appelle la fonction 'lancer_mission'
     st.button("🚀 LANCER LE DOSSIER", type="primary", on_click=lancer_mission)
 
-    # Téléchargement
     st.markdown("---")
     if st.session_state.conversation_log:
         df = pd.DataFrame(st.session_state.conversation_log)
@@ -123,42 +108,25 @@ with st.sidebar:
         st.download_button("📥 Télécharger (CSV)", csv, "suivi_1agora.csv", "text/csv")
 
 # --- 7. CHAT ---
-
-# Si la liste des messages est vide, on affiche l'écran d'accueil
 if not st.session_state.messages:
-    st.info("⬅️ Veuillez choisir un dossier dans le menu de gauche et cliquer sur 'LANCER LE DOSSIER'.")
+    st.info("⬅️ Choisissez un dossier à gauche et cliquez sur LANCER.")
 else:
-    # Sinon, on affiche le chat
     for msg in st.session_state.messages:
         st.chat_message(msg["role"]).write(msg["content"])
 
-    # Zone de saisie
     if prompt := st.chat_input("Votre réponse..."):
         if not student_id:
             st.warning("⚠️ Prénom requis à gauche !")
         else:
-            # 1. Affiche message élève
             st.chat_message("user").write(prompt)
             st.session_state.messages.append({"role": "user", "content": prompt})
             save_log(student_id, "Eleve", prompt)
 
-            # 2. Réponse IA
             try:
-                msgs = [{"role": "system", "content": SYSTEM_PROMPT}]
-                for m in st.session_state.messages:
-                    msgs.append({"role": m["role"], "content": m["content"]})
-                
-                chat_completion = client.chat.completions.create(
-                    messages=msgs,
-                    model="llama-3.3-70b-versatile",
-                    temperature=0.7
-                )
-                bot_reply = chat_completion.choices[0].message.content
-                
-                st.chat_message("assistant").write(bot_reply)
-                st.session_state.messages.append({"role": "assistant", "content": bot_reply})
-                save_log(student_id, "Superviseur", bot_reply)
-                # Pas besoin de rerun ici, Streamlit gère l'affichage du nouveau message
-                
-            except Exception as e:
-                st.error(f"Erreur : {e}")
+                msgs = [{"role": "system", "content": SYSTEM_PROMPT}] + [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]
+                chat = client.chat.completions.create(messages=msgs, model="llama-3.3-70b-versatile", temperature=0.7)
+                rep = chat.choices[0].message.content
+                st.chat_message("assistant").write(rep)
+                st.session_state.messages.append({"role": "assistant", "content": rep})
+                save_log(student_id, "Superviseur", rep)
+            except Exception as e: st.error(f"Erreur : {e}")
