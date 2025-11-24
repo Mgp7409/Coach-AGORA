@@ -9,7 +9,6 @@ import docx
 from pypdf import PdfReader
 
 # --- 1. CONFIGURATION ---
-# J'ai ajouté initial_sidebar_state="expanded" pour forcer le volet à s'ouvrir
 st.set_page_config(page_title="1AGORA", page_icon="🏢", initial_sidebar_state="expanded")
 
 # --- 2. GESTION DU STYLE (ACCESSIBILITÉ) ---
@@ -29,8 +28,6 @@ if st.session_state.mode_dys:
     </style>
     """, unsafe_allow_html=True)
 
-# J'ai SUPPRIMÉ le code qui cachait le menu du haut pour que vous puissiez partager l'appli.
-
 st.title("♾️ Agence PRO'AGORA")
 st.caption("Simulation Professionnelle Gamifiée")
 
@@ -39,7 +36,7 @@ try:
     api_key = st.secrets["GROQ_API_KEY"]
     client = Groq(api_key=api_key)
 except:
-    st.error("⚠️ Clé API manquante.")
+    st.error("⚠️ Clé API manquante. Vérifiez votre fichier .streamlit/secrets.toml")
     st.stop()
 
 # --- 4. FONCTIONS UTILITAIRES ---
@@ -162,7 +159,8 @@ def lancer_mission():
         msgs = [{"role": "system", "content": get_system_prompt(st.session_state.mode_simple)}]
         msgs.append({"role": "user", "content": prompt_demarrage})
         
-        completion = client.chat.completions.create(messages=msgs, model="llama-3.3-70b-versatile", temperature=0.8)
+        # MODIFICATION 1 : Modèle plus léger
+        completion = client.chat.completions.create(messages=msgs, model="llama-3.1-8b-instant", temperature=0.8)
         intro_bot = completion.choices[0].message.content
         st.session_state.messages.append({"role": "assistant", "content": intro_bot})
     except Exception as e:
@@ -252,8 +250,11 @@ else:
             st.session_state.messages.append({"role": "user", "content": user_msg})
             save_log(student_id, "Eleve", f"[FICHIER] {uploaded_doc.name}")
             try:
-                msgs = [{"role": "system", "content": get_system_prompt(st.session_state.mode_simple)}] + [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]
-                completion = client.chat.completions.create(messages=msgs, model="llama-3.3-70b-versatile", temperature=0.7)
+                # MODIFICATION 2 : Mémoire courte (10 msg) + Modèle 8b
+                memoire_courte = st.session_state.messages[-10:]
+                msgs = [{"role": "system", "content": get_system_prompt(st.session_state.mode_simple)}] + [{"role": m["role"], "content": m["content"]} for m in memoire_courte]
+                
+                completion = client.chat.completions.create(messages=msgs, model="llama-3.1-8b-instant", temperature=0.7)
                 rep = completion.choices[0].message.content
                 st.chat_message("assistant").write(rep)
                 st.session_state.messages.append({"role": "assistant", "content": rep})
@@ -269,8 +270,11 @@ else:
             st.session_state.messages.append({"role": "user", "content": prompt})
             save_log(student_id, "Eleve", prompt)
             try:
-                msgs = [{"role": "system", "content": get_system_prompt(st.session_state.mode_simple)}] + [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]
-                completion = client.chat.completions.create(messages=msgs, model="llama-3.3-70b-versatile", temperature=0.7)
+                # MODIFICATION 2 : Mémoire courte (10 msg) + Modèle 8b
+                memoire_courte = st.session_state.messages[-10:]
+                msgs = [{"role": "system", "content": get_system_prompt(st.session_state.mode_simple)}] + [{"role": m["role"], "content": m["content"]} for m in memoire_courte]
+                
+                completion = client.chat.completions.create(messages=msgs, model="llama-3.1-8b-instant", temperature=0.7)
                 rep = completion.choices[0].message.content
                 st.chat_message("assistant").write(rep)
                 st.session_state.messages.append({"role": "assistant", "content": rep})
