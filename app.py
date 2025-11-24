@@ -7,12 +7,6 @@ from datetime import datetime
 from io import StringIO
 
 # --- 0. SÉCURITÉ & DÉPENDANCES ---
-# Assurez-vous d'avoir un fichier requirements.txt contenant :
-# streamlit
-# pandas
-# groq
-# python-docx
-
 try:
     from docx import Document
 except ImportError:
@@ -27,47 +21,67 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- 2. STYLE CSS & BANNIÈRE SÉCURITÉ ---
-# On cache le footer Streamlit par défaut et on ajoute du style pour les alertes
+# --- 2. STYLE CSS & FOOTER FIXE ---
+# C'est ici que la magie opère pour le bandeau en bas
 st.markdown("""
 <style>
+    /* Cache le footer standard Streamlit */
     footer {visibility: hidden;}
+    
+    /* Ajustement du conteneur principal */
     .reportview-container .main .block-container {padding-top: 2rem;}
-    .alert-box {
+    
+    /* LE BANDEAU DE BAS DE PAGE (Disclaimer) */
+    .fixed-footer {
+        position: fixed;
+        left: 0;
+        bottom: 0;
+        width: 100%;
+        background-color: #f8f9fa;
+        color: #555;
+        text-align: center;
+        padding: 8px 10px;
+        font-size: 12px;
+        border-top: 1px solid #e1e4e8;
+        z-index: 99999; /* Toujours au-dessus */
+        line-height: 1.4;
+    }
+
+    /* ASTUCE CRUCIALE : Remonter la barre de chat pour ne pas qu'elle soit cachée par le footer */
+    [data-testid="stBottom"] {
+        bottom: 60px !important; /* On remonte la zone de saisie de 60px */
+        padding-bottom: 0px !important;
+    }
+    
+    /* Style pour l'alerte latérale */
+    .sidebar-alert {
         padding: 1rem;
-        background-color: #fff3cd;
-        border: 1px solid #ffeeba;
-        color: #856404;
+        background-color: #ffebee;
+        border: 1px solid #ffcdd2;
+        color: #c62828;
         border-radius: 5px;
-        margin-bottom: 1rem;
+        font-weight: bold;
         font-size: 0.9rem;
+        margin-bottom: 1rem;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. GESTION DES CLÉS API (ROTATION SÉCURISÉE) ---
+# --- 3. GESTION DES CLÉS API ---
 def get_api_keys_list():
-    """Récupère les clés de manière sécurisée depuis st.secrets"""
-    # Priorité 1 : Liste de clés pour la rotation
     if "groq_keys" in st.secrets:
         return st.secrets["groq_keys"]
-    # Priorité 2 : Clé unique
     elif "GROQ_API_KEY" in st.secrets:
         return [st.secrets["GROQ_API_KEY"]]
     return []
 
 def query_groq_with_rotation(messages):
-    """Logique de tentative sur plusieurs clés et modèles"""
     available_keys = get_api_keys_list()
-    
     if not available_keys:
-        return None, "ERREUR CONFIG : Aucune clé API trouvée dans les secrets."
+        return None, "ERREUR CONFIG : Aucune clé API trouvée."
     
-    # Mélange aléatoire pour répartir la charge entre les élèves
     keys_to_try = list(available_keys)
     random.shuffle(keys_to_try)
-    
-    # Modèles par ordre de préférence (Llama 3 est très performant et rapide)
     models = ["llama-3.3-70b-versatile", "mixtral-8x7b-32768", "llama-3.1-8b-instant"]
 
     for key in keys_to_try:
@@ -78,18 +92,13 @@ def query_groq_with_rotation(messages):
                     chat = client.chat.completions.create(
                         messages=messages,
                         model=model,
-                        temperature=0.5, # Température basse pour rester professionnel
+                        temperature=0.5,
                         max_tokens=1024, 
                     )
                     return chat.choices[0].message.content, model
-                except Exception as e:
-                    # Si erreur modèle, on passe au suivant
-                    continue 
-        except Exception:
-            # Si erreur clé, on passe à la suivante
-            continue
-    
-    return None, "SATURATION SERVICE : Tous les modèles sont occupés. Réessaie dans 1 minute."
+                except: continue 
+        except: continue
+    return None, "SATURATION SERVICE."
 
 # --- 4. TRAITEMENT FICHIERS ---
 def extract_text_from_docx(file):
@@ -106,16 +115,13 @@ if "logs" not in st.session_state:
     st.session_state.logs = []
 
 def log_interaction(student, role, content):
-    """Garde une trace locale (non persistante après fermeture)"""
     st.session_state.logs.append({
         "Heure": datetime.now().strftime("%H:%M:%S"),
         "Utilisateur": student,
         "Role": role,
-        "Message": content[:50] + "..." # On tronque pour le log
+        "Message": content[:50]
     })
 
-# --- 6. LE "SUPER PROMPT" PÉDAGOGIQUE ---
-# C'est ici que l'intelligence du Gem est injectée
 SYSTEM_PROMPT = """
 RÔLE : Tu es le Superviseur Virtuel de l'Agence Pro'AGOrA.
 TON : Professionnel, encourageant mais exigeant (Vouvoiement).
@@ -139,105 +145,94 @@ INITIAL_MESSAGE = """
 👋 **Bonjour Opérateur/Opératrice.**
 
 Bienvenue à l'Agence Pro'AGOrA. Je suis ton Superviseur Virtuel.
-Je suis là pour t'aider à préparer tes fiches d'activités ou ton dossier CCF.
 
 **⚠️ RÈGLE DE SÉCURITÉ :** Nous travaillons sur des cas **FICTIFS**. 
-N'écris jamais ton vrai nom de famille, ni celui d'une vraie entreprise, ni de vrais numéros de téléphone.
+N'écris jamais ton vrai nom de famille, ni celui d'une vraie entreprise.
 
 **Pour commencer :**
 Es-tu en Seconde, Première ou Terminale ? Et sur quel BLOC travailles-tu (1, 2 ou 3) ?
 """
 
-# Initialisation du chat au premier chargement
 if not st.session_state.messages:
     st.session_state.messages.append({"role": "assistant", "content": INITIAL_MESSAGE})
 
-# --- 7. INTERFACE GRAPHIQUE ---
-
-# A. EN-TÊTE LÉGAL (DISCLAIMER)
-st.markdown("""
-<div class="alert-box">
-    <b>ℹ️ Outil Pédagogique Expérimental (IA)</b><br>
-    Cet assistant est une Intelligence Artificielle. Il peut commettre des erreurs. 
-    Vérifiez toujours les informations avec votre professeur. 
-    Aucune donnée personnelle ne doit être saisie ici.
-</div>
-""", unsafe_allow_html=True)
+# --- 6. INTERFACE GRAPHIQUE ---
 
 st.title("🎓 Supervision Agence Pro'AGOrA")
 
-# B. BARRE LATÉRALE
+# A. BARRE LATÉRALE
 with st.sidebar:
     st.image("https://img.icons8.com/color/96/student-center.png", width=80)
     st.header("Profil Élève")
     
-    # Alerte Rouge Permanente
-    st.error("🚫 **INTERDIT** : Ne jamais saisir de données personnelles réelles (GDPR).")
+    # Alerte Rouge Permanente (Style classe sidebar-alert défini plus haut)
+    st.markdown("""
+    <div class="sidebar-alert">
+    🚫 INTERDIT : Ne jamais saisir de données personnelles réelles.
+    </div>
+    """, unsafe_allow_html=True)
     
     student_name = st.text_input("Ton Prénom (seulement) :", placeholder="Ex: Thomas")
     
     st.divider()
-    
     st.subheader("📂 Analyse de Document")
-    st.caption("Si tu as déjà rédigé ton activité sur Word, dépose-la ici pour analyse.")
     uploaded_file = st.file_uploader("Fichier .docx uniquement", type=['docx'])
     
     if uploaded_file and student_name:
         if st.button("🚀 Analyser ce document"):
             with st.spinner("Lecture et analyse en cours..."):
                 text_content = extract_text_from_docx(uploaded_file)
-                # Injection contextuelle
                 prompt_analysis = f"Voici mon compte-rendu écrit (Fichier Word) : \n\n{text_content[:8000]}"
                 st.session_state.messages.append({"role": "user", "content": prompt_analysis})
                 log_interaction(student_name, "Eleve", "Upload Fichier")
                 st.rerun()
 
     st.divider()
-    if st.button("🔄 Nouvelle Session (Effacer tout)"):
+    if st.button("🔄 Nouvelle Session"):
         st.session_state.messages = [{"role": "assistant", "content": INITIAL_MESSAGE}]
         st.session_state.logs = []
         st.rerun()
 
-# C. ZONE DE CHAT
+# B. ZONE DE CHAT
 chat_container = st.container()
-
 with chat_container:
     for msg in st.session_state.messages:
-        # On affiche joliment les messages
         with st.chat_message(msg["role"], avatar="🤖" if msg["role"] == "assistant" else "🧑‍🎓"):
-            # Si c'est un long texte (analyse doc), on le replie
             if "Voici mon compte-rendu écrit" in msg["content"]:
                 with st.expander("📄 Voir le document envoyé"):
                     st.write(msg["content"])
             else:
                 st.markdown(msg["content"])
+    
+    # Espace vide pour éviter que le dernier message ne soit caché par la zone de saisie remontée
+    st.write("<br><br><br>", unsafe_allow_html=True)
+
+# C. INJECTION DU FOOTER (BANDEAU PERMANENT)
+st.markdown("""
+<div class="fixed-footer">
+    ℹ️ <b>Outil Pédagogique Expérimental (IA)</b><br>
+    Cet assistant est une Intelligence Artificielle. Il peut commettre des erreurs. 
+    Vérifiez toujours les informations avec votre professeur. 
+    Aucune donnée personnelle ne doit être saisie ici.
+</div>
+""", unsafe_allow_html=True)
 
 # D. SAISIE UTILISATEUR
 if user_input := st.chat_input("Réponds au superviseur ici..."):
     if not student_name:
-        st.toast("⚠️ Indique ton prénom dans le menu de gauche pour commencer !", icon="👉")
+        st.toast("⚠️ Indique ton prénom dans le menu de gauche !", icon="👉")
     else:
-        # 1. Ajout message utilisateur
         st.session_state.messages.append({"role": "user", "content": user_input})
         log_interaction(student_name, "User", user_input)
         
-        # 2. Appel IA
         with st.chat_message("assistant", avatar="🤖"):
             with st.spinner("Analyse pédagogique en cours..."):
-                
-                # Construction de l'historique pour l'API
-                # On garde le System Prompt + les 10 derniers échanges pour garder le contexte sans saturer
                 messages_payload = [{"role": "system", "content": SYSTEM_PROMPT}]
                 messages_payload.extend(st.session_state.messages[-10:])
-                
-                response_content, debug_model = query_groq_with_rotation(messages_payload)
-                
+                response_content, _ = query_groq_with_rotation(messages_payload)
                 if not response_content:
-                    response_content = "⚠️ Désolé, je suis surchargé. Peux-tu reformuler ta réponse ?"
-                
+                    response_content = "⚠️ Désolé, je suis surchargé. Reformule ta réponse."
                 st.markdown(response_content)
-                
-        # 3. Sauvegarde réponse IA
+        
         st.session_state.messages.append({"role": "assistant", "content": response_content})
-        log_interaction(student_name, "Assistant", response_content)
         st.rerun()
