@@ -2,16 +2,16 @@ import streamlit as st
 import pandas as pd
 import os
 import random
-import time
-from groq import Groq, RateLimitError, APIConnectionError
+from groq import Groq
 from datetime import datetime
 from io import StringIO
 
-# --- 0. IMPORTATION SPÉCIALE WORD ---
+# --- 0. IMPORTATION MODULE WORD ---
+# Si cette ligne échoue, c'est que requirements.txt n'est pas lu
 try:
     from docx import Document
 except ImportError:
-    st.error("⚠️ Le module 'python-docx' n'est pas installé. Ajoutez 'python-docx' à votre fichier requirements.txt")
+    st.error("⚠️ ERREUR : Le module 'python-docx' manque. Vérifiez votre fichier requirements.txt")
 
 # --- 1. CONFIGURATION ---
 st.set_page_config(
@@ -20,7 +20,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- 2. CSS ---
+# --- 2. STYLE CSS ---
 hide_css = """
 <style>
 footer {visibility: hidden;}
@@ -29,49 +29,66 @@ header {visibility: visible !important;}
 """
 st.markdown(hide_css, unsafe_allow_html=True)
 
-# --- 3. GESTION DES CLÉS ---
+# --- 3. GESTION DES CLÉS API (ROTATION) ---
 def get_api_keys_list():
+    """Récupère la liste des clés dans secrets.toml"""
     if "groq_keys" in st.secrets:
         return st.secrets["groq_keys"]
+    # Fallback ancienne méthode
     single_key = os.environ.get("GROQ_API_KEY") or st.secrets.get("GROQ_API_KEY")
     if single_key:
         return [single_key]
     return []
 
 def query_groq_with_rotation(messages):
+    """Essaie plusieurs clés et plusieurs modèles si saturation"""
     available_keys = get_api_keys_list()
-    if not available_keys:
-        return None, "Aucune clé"
     
+    if not available_keys:
+        return None, "Aucune clé configurée"
+    
+    # Mélange pour répartir la charge
     keys_to_try = list(available_keys)
     random.shuffle(keys_to_try)
     
-    # On ajoute Llama 3.3 qui gère très bien les textes longs (comme les Word)
+    # Liste des modèles (Le 70b est meilleur pour les longs textes Word)
     models = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768"]
 
     for key in keys_to_try:
         client = Groq(api_key=key)
         for model in models:
             try:
+                # On augmente max_tokens pour permettre des réponses détaillées sur les rapports
                 chat = client.chat.completions.create(
                     messages=messages,
                     model=model,
                     temperature=0.6,
-                    max_tokens=800, # Augmenté pour répondre aux rapports
+                    max_tokens=1000, 
                 )
                 return chat.choices[0].message.content, model
             except:
-                continue
-    return None, "Erreur Totale"
+                continue # Clé suivante
+    
+    return None, "Saturation Totale"
 
-# --- 4. DATA & FONCTIONS FICHIERS ---
+# --- 4. FONCTIONS FICHIERS (WORD & CSV) ---
+def extract_text_from_docx(file):
+    """Extrait le texte brut d'un fichier .docx"""
+    try:
+        doc = Document(file)
+        full_text = []
+        for para in doc.paragraphs:
+            if para.text.strip():
+                full_text.append(para.text)
+        return "\n".join(full_text)
+    except Exception as e:
+        return f"Erreur lecture fichier : {str(e)}"
+
+# Gestion de l'état
 if "conversation_log" not in st.session_state:
     st.session_state.conversation_log = []
-
 if "messages" not in st.session_state:
     st.session_state.messages = []
-
-# Nouvelle variable pour éviter que le fichier soit analysé en boucle
 if "file_processed" not in st.session_state:
     st.session_state.file_processed = False
 
@@ -91,144 +108,153 @@ def load_session_from_df(df):
         })
     st.success("Session chargée.")
 
-def extract_text_from_docx(file):
-    """Lit un fichier Word et retourne le texte brut."""
-    try:
-        doc = Document(file)
-        full_text = []
-        for para in doc.paragraphs:
-            if para.text.strip(): # On ignore les lignes vides
-                full_text.append(para.text)
-        return "\n".join(full_text)
-    except Exception as e:
-        return f"Erreur de lecture du fichier : {e}"
-
-# --- 5. CERVEAU SUPERVISEUR ---
+# --- 5. INTELLIGENCE ARTIFICIELLE ---
 SYSTEM_PROMPT = """
-Tu es le Superviseur Virtuel de l'Agence Pro'AGOrA.
-Ton rôle est d'aider l'élève à ANALYSER l'activité qu'il a réalisée (décrite par chat ou via un fichier Word importé).
+Tu es le Superviseur Virtuel de l'Agence Pro'AGOrA (Bac Pro).
+Ton rôle : Aider l'élève à ANALYSER son activité professionnelle.
 
-RÈGLES STRICTES :
-1. Si l'élève envoie un TEXTE LONG (rapport/compte-rendu) :
-   - Lis-le attentivement.
-   - Confirme la réception ("J'ai lu ton document sur...").
-   - Ne corrige pas tout de suite l'orthographe.
-   - Pose une question précise pour vérifier si l'élève maîtrise ce qu'il a écrit (ex: "Pourquoi as-tu utilisé cet outil ?" ou "Peux-tu détailler l'étape X ?").
+CONTEXTE :
+L'élève peut te parler via le chat OU t'envoyer un compte-rendu écrit (fichier Word).
 
-2. Si l'échange est verbal (chat court) :
-   - Demande de décrire l'activité étape par étape.
+RÈGLES D'INTERACTION :
+1. Si l'élève envoie un DOCUMENT (Compte-rendu) :
+   - Accuse réception clairement ("J'ai lu ton document...").
+   - Ne corrige pas l'orthographe tout de suite.
+   - Pose une question de VÉRIFICATION pour s'assurer qu'il a compris ce qu'il a fait (ex: "Pourquoi as-tu choisi cet outil ?", "Explique-moi cette étape").
 
-3. Règle d'Or : Données fictives uniquement. Si le document contient de vrais noms, alerte l'élève.
+2. Si l'élève parle en CHAT :
+   - Demande-lui de décrire son activité étape par étape.
+   - Une seule question à la fois.
+
+3. SÉCURITÉ :
+   - Si tu détectes de vrais noms de famille ou données sensibles, rappelle la règle : "Attention, utilise des données fictives uniquement."
 """
 
 MENU_AGORA = """
 **Bonjour Opérateur.** Je suis ton Superviseur.
 
-Tu peux soit **discuter** avec moi, soit **déposer ton compte-rendu Word** (à gauche) pour que je l'analyse.
+Tu peux :
+1. **Discuter** avec moi ici pour décrire ton activité.
+2. **Déposer ton compte-rendu Word** (menu de gauche) pour que je l'analyse.
 
 **Pour commencer :**
-1. Choisis ton BLOC (GRCU, OSP, AP).
-2. Ou dépose ton fichier `.docx`.
+Indique le BLOC concerné (GRCU, OSP, AP) ou dépose ton fichier.
 """
 
 def get_fallback_response(last_user_msg):
-    """Mode Secours."""
-    return "J'ai bien reçu ton message. Cependant, mes systèmes d'analyse sont momentanément saturés. Peux-tu reformuler ou détailler les outils utilisés ?"
+    return "J'ai bien reçu ton message. Cependant, mes systèmes sont très sollicités. Peux-tu reformuler ou détailler les outils utilisés ?"
 
-# --- 6. INTERFACE ---
+# --- 6. INTERFACE UTILISATEUR ---
 st.title("🏢 Agence Pro'AGOrA")
 
-# Diagnostic Clés discret
+# Indicateur discret de connexion (pour le prof uniquement)
 if "groq_keys" in st.secrets and len(st.secrets["groq_keys"]) > 0:
-    st.caption(f"🟢 Système connecté ({len(st.secrets['groq_keys'])} clés)")
+    st.caption(f"🟢 Système actif ({len(st.secrets['groq_keys'])} clés)")
 else:
-    st.error("🔴 Aucune clé API trouvée.")
+    st.error("🔴 Aucune clé API trouvée dans les Secrets !")
 
+# Message d'accueil au démarrage
 if not st.session_state.messages:
     st.session_state.messages.append({"role": "assistant", "content": MENU_AGORA})
 
+# --- BARRE LATÉRALE (SIDEBAR) ---
 with st.sidebar:
-    st.header("👤 Élève")
+    st.header("👤 Espace Élève")
     student_id = st.text_input("Ton Prénom :", placeholder="Ex: Alex")
     
     st.markdown("---")
     
-    # --- ZONE DÉPÔT WORD ---
-    st.subheader("📄 Analyse de Document")
-    uploaded_docx = st.file_uploader("Dépose ton compte-rendu (.docx)", type=['docx'])
+    # ZONE DÉPÔT WORD
+    st.subheader("📄 Déposer un compte-rendu")
+    uploaded_docx = st.file_uploader("Format Word (.docx)", type=['docx'])
     
-    # Logique de traitement du fichier
+    # Traitement du fichier Word
     if uploaded_docx is not None and not st.session_state.file_processed:
         if not student_id:
-            st.error("Indique ton prénom d'abord !")
+            st.warning("⚠️ Entre ton prénom avant de déposer le fichier !")
         else:
-            with st.spinner("Lecture du document..."):
+            with st.spinner("Lecture du document en cours..."):
+                # 1. Extraction du texte
                 doc_text = extract_text_from_docx(uploaded_docx)
                 
-                # On limite la taille pour ne pas faire exploser l'IA (env. 3 pages max)
-                if len(doc_text) > 8000: 
-                    doc_text = doc_text[:8000] + "... (texte tronqué)"
+                # 2. On tronque si trop long (pour éviter crash API)
+                if len(doc_text) > 10000:
+                    doc_text = doc_text[:10000] + "\n...[Suite tronquée]"
                 
-                # On crée un message utilisateur artificiel avec le contenu du doc
-                user_msg = f"[DOCUMENT IMPORTÉ] Voici mon compte-rendu d'activité :\n\n{doc_text}"
+                # 3. Injection dans le chat comme si l'élève l'avait écrit
+                user_msg = f"Voici mon compte-rendu d'activité (Fichier Importé) :\n\n{doc_text}"
                 st.session_state.messages.append({"role": "user", "content": user_msg})
-                save_log(student_id, "Eleve (Doc)", "Envoi d'un fichier Word")
+                save_log(student_id, "Eleve (Doc)", "Envoi Fichier Word")
                 
-                # On marque comme traité pour ne pas recharger à chaque clic
+                # 4. On marque le fichier comme traité
                 st.session_state.file_processed = True
-                st.rerun() # On recharge pour lancer l'analyse IA immédiatement
+                st.rerun() # Recharge la page pour déclencher la réponse IA
 
-    # Bouton pour "oublier" le fichier et en mettre un autre
+    # Reset du flag si on enlève le fichier
     if st.session_state.file_processed and not uploaded_docx:
         st.session_state.file_processed = False
 
     st.markdown("---")
     
+    # Gestion Session (Sauvegarde/Reprise)
+    st.caption("Gestion Session")
     if st.session_state.conversation_log:
         df = pd.DataFrame(st.session_state.conversation_log)
-        st.download_button("💾 Sauvegarder conversation", df.to_csv(index=False, sep=';').encode('utf-8-sig'), f"agora_{student_id}.csv", "text/csv")
+        st.download_button("💾 Sauvegarder (CSV)", df.to_csv(index=False, sep=';').encode('utf-8-sig'), f"agora_{student_id}.csv", "text/csv")
     
+    uploaded_csv = st.file_uploader("Reprendre session (CSV)", type=['csv'])
+    if uploaded_csv:
+        try:
+            s_data = StringIO(uploaded_csv.getvalue().decode('utf-8-sig')).read()
+            load_session_from_df(pd.read_csv(StringIO(s_data), sep=';'))
+        except: st.error("Fichier CSV invalide")
+
     if st.button("🗑️ Nouvelle Session"):
         st.session_state.messages = [{"role": "assistant", "content": MENU_AGORA}]
         st.session_state.conversation_log = []
         st.session_state.file_processed = False
         st.rerun()
 
-# --- 7. CHAT & ANALYSE ---
+# --- 7. ZONE DE CHAT CENTRALE ---
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
-        # Si le message est le gros document, on l'affiche en "fermé" pour ne pas polluer l'écran
-        if "[DOCUMENT IMPORTÉ]" in msg["content"]:
+        # Si c'est un très long message (document), on le cache dans un accordéon
+        if "Voici mon compte-rendu d'activité (Fichier Importé)" in msg["content"]:
             with st.expander("📄 Voir le contenu du document envoyé"):
                 st.write(msg["content"])
         else:
             st.write(msg["content"])
 
-# Déclenchement automatique de la réponse IA si le dernier message est un document (User)
-last_message_is_user = len(st.session_state.messages) > 0 and st.session_state.messages[-1]["role"] == "user"
+# Détection : Est-ce à l'IA de répondre ? (Si dernier message = user)
+last_msg_is_user = len(st.session_state.messages) > 0 and st.session_state.messages[-1]["role"] == "user"
 
-if prompt := st.chat_input("Discuter avec le superviseur..."):
+if prompt := st.chat_input("Écris ta réponse ici..."):
     if not student_id:
-        st.toast("⚠️ Prénom obligatoire !")
+        st.toast("⚠️ N'oublie pas ton prénom à gauche !")
     else:
         st.chat_message("user").write(prompt)
         st.session_state.messages.append({"role": "user", "content": prompt})
         save_log(student_id, "Eleve", prompt)
-        last_message_is_user = True
+        last_msg_is_user = True
+        st.rerun() # Force le rafraîchissement pour lancer l'IA
 
-# Si c'est au tour de l'IA de répondre (soit après un chat, soit après un upload Word)
-if last_message_is_user:
-    # Context (8 derniers messages)
-    messages_api = [{"role": "system", "content": SYSTEM_PROMPT}]
-    recent_history = st.session_state.messages[-8:] 
-    for m in recent_history:
-        messages_api.append({"role": m["role"], "content": m["content"]})
-
+# Réponse IA (Automatique après Chat OU Upload Word)
+if last_msg_is_user:
     with st.chat_message("assistant"):
-        with st.spinner("Analyse en cours..."):
-            reply, info = query_groq_with_rotation(messages_api)
+        with st.spinner("Le superviseur analyse ton travail..."):
+            
+            # Préparation historique (8 derniers messages)
+            messages_api = [{"role": "system", "content": SYSTEM_PROMPT}]
+            recent_history = st.session_state.messages[-8:] 
+            for m in recent_history:
+                messages_api.append({"role": m["role"], "content": m["content"]})
+            
+            # Appel API
+            reply, info_debug = query_groq_with_rotation(messages_api)
+            
             if not reply:
                 reply = get_fallback_response("Erreur")
+            
             st.write(reply)
     
     st.session_state.messages.append({"role": "assistant", "content": reply})
