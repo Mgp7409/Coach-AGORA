@@ -7,24 +7,14 @@ from groq import Groq, RateLimitError, APIConnectionError
 from datetime import datetime
 from io import StringIO
 
-# --- 1. CONFIGURATION DE LA PAGE ---
+# --- 1. CONFIGURATION ---
 st.set_page_config(
     page_title="Agence Pro'AGOrA", 
     page_icon="🏢",
     initial_sidebar_state="expanded"
 )
 
-# --- 2. DIAGNOSTIC SECRET (POUR VOUS AIDER) ---
-# Ce bloc vérifie si votre fichier secrets.toml est bien lu
-if "groq_keys" in st.secrets:
-    nb_keys = len(st.secrets["groq_keys"])
-    st.success(f"✅ DIAGNOSTIC SUCCÈS : J'ai trouvé {nb_keys} clés dans la liste 'groq_keys'. Rotation active !")
-elif "GROQ_API_KEY" in st.secrets:
-    st.info("ℹ️ DIAGNOSTIC : Je ne trouve qu'une seule clé (GROQ_API_KEY). Créez une liste 'groq_keys' pour plus de stabilité.")
-else:
-    st.error("❌ DIAGNOSTIC ERREUR : Je ne trouve aucune clé ! Vérifiez votre fichier secrets.toml. La variable doit s'appeler 'groq_keys'.")
-
-# --- 3. CSS (STYLE) ---
+# --- 2. CSS ---
 hide_css = """
 <style>
 footer {visibility: hidden;}
@@ -33,78 +23,47 @@ header {visibility: visible !important;}
 """
 st.markdown(hide_css, unsafe_allow_html=True)
 
-# --- 4. GESTION INTELLIGENTE DES CLÉS (KEY ROTATION) ---
+# --- 3. GESTION DES CLÉS (Invisible pour l'élève) ---
 
 def get_api_keys_list():
-    """
-    Récupère la liste des clés disponibles.
-    Ordre de priorité :
-    1. Clé manuelle entrée dans la barre latérale (Urgence)
-    2. Liste 'groq_keys' dans les secrets (Recommandé)
-    3. Clé unique 'GROQ_API_KEY' (Ancienne méthode)
-    """
-    # 1. Clé de secours manuelle
-    if "manual_api_key" in st.session_state and st.session_state.manual_api_key:
-        return [st.session_state.manual_api_key]
-
-    # 2. Liste de clés (Rotation)
+    """Récupère les clés depuis les secrets uniquement."""
     if "groq_keys" in st.secrets:
         return st.secrets["groq_keys"]
-    
-    # 3. Clé unique (Fallback)
+    # Fallback ancienne méthode (une seule clé)
     single_key = os.environ.get("GROQ_API_KEY") or st.secrets.get("GROQ_API_KEY")
     if single_key:
         return [single_key]
-    
     return []
 
 def query_groq_with_rotation(messages):
-    """
-    Essaie d'appeler l'API. Si une clé échoue (429), elle en tente une autre
-    automatiquement jusqu'à épuisement du stock.
-    """
+    """Rotation automatique des clés en cas d'erreur."""
     available_keys = get_api_keys_list()
     
     if not available_keys:
-        return None, "Aucune clé trouvée"
+        return None, "Aucune clé configurée"
     
-    # Mélanger les clés pour répartir la charge
-    # (On fait une copie pour ne pas modifier l'ordre original à chaque fois)
     keys_to_try = list(available_keys)
     random.shuffle(keys_to_try)
     
-    # Modèles à tester par ordre de rapidité/qualité
-    models = ["llama-3.1-8b-instant", "mixtral-8x7b-32768", "gemma2-9b-it"]
+    models = ["llama-3.1-8b-instant", "mixtral-8x7b-32768"]
 
-    # On boucle sur CHAQUE clé disponible
     for key in keys_to_try:
         client = Groq(api_key=key)
-        
-        # On essaie les modèles sur cette clé
         for model in models:
             try:
                 chat = client.chat.completions.create(
                     messages=messages,
                     model=model,
-                    temperature=0.6,
+                    temperature=0.7, # Un peu plus créatif pour s'adapter à l'élève
                     max_tokens=600,
                 )
-                # SUCCÈS ! On retourne la réponse
-                # On cache la clé sauf les 4 derniers caractères pour le debug
-                key_suffix = key[-4:] if len(key) > 4 else "???"
-                return chat.choices[0].message.content, f"{model} (Clé ...{key_suffix})"
-            
-            except RateLimitError:
-                # Cette clé est saturée, on passe à la suivante
-                continue 
-            except Exception:
-                # Autre erreur, on passe à la suivante
-                continue
+                return chat.choices[0].message.content, model
+            except:
+                continue # On passe à la clé suivante sans rien dire
     
-    # Si on arrive ici, c'est que TOUTES les clés ont échoué
-    return None, "All_Keys_Failed"
+    return None, "Erreur Totale"
 
-# --- 5. GESTION DES LOGS ---
+# --- 4. DATA ---
 if "conversation_log" not in st.session_state:
     st.session_state.conversation_log = []
 
@@ -114,10 +73,7 @@ if "messages" not in st.session_state:
 def save_log(student_id, role, content):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     st.session_state.conversation_log.append({
-        "Heure": timestamp,
-        "Eleve": student_id,
-        "Role": role,
-        "Message": content
+        "Heure": timestamp, "Eleve": student_id, "Role": role, "Message": content
     })
 
 def load_session_from_df(df):
@@ -128,52 +84,83 @@ def load_session_from_df(df):
             "role": "assistant" if row.Role == "Assistant" else "user",
             "content": row.Message
         })
-    st.success("Session rechargée avec succès.")
+    st.success("Session chargée.")
 
-# --- 6. PROMPTS ET CONTENU ---
+# --- 5. CERVEAU DU SUPERVISEUR ---
+
 SYSTEM_PROMPT = """
-Tu es le Superviseur Virtuel Pro'AGOrA (Bac Pro).
-Ton but : faire réfléchir l'élève sans faire le travail à sa place.
-Règles : 
-1. Une seule question à la fois.
-2. Ton professionnel et encourageant.
-3. Si l'élève donne une info perso, rappel à l'ordre (Données fictives uniquement).
-4. Structure : Accueil -> Activité/Lieu -> Outils/Étapes -> Analyse -> Bilan.
+Tu es le Superviseur Virtuel de l'Agence Pro'AGOrA.
+Ton rôle est d'aider l'élève à ANALYSER l'activité qu'il vient de réaliser.
+
+RÈGLES STRICTES :
+1. NE JAMAIS PROPOSER DE SCÉNARIO FICTIF. C'est l'élève qui doit raconter SON travail.
+2. Demande toujours : "Quelle tâche as-tu réalisée ?" ou "Explique-moi ce que tu as fait".
+3. Une seule question à la fois.
+4. Si l'élève est vague, demande des précisions sur les outils, les logiciels ou les étapes.
+5. Rappelle toujours la "Règle d'Or" (Données fictives) si l'élève semble donner un vrai nom.
+
+Déroulement type :
+1. Demander le Bloc (1, 2 ou 3).
+2. Demander de DÉCRIRE l'activité réalisée.
+3. Questionner sur les OUTILS / LOGICIELS utilisés.
+4. Questionner sur les DIFFICULTÉS ou la MÉTHODE.
+5. Faire une courte synthèse positive.
 """
 
 MENU_AGORA = """
-**Bonjour Opérateur. Bienvenue à l'Agence Pro'AGOrA.**
+**Bonjour Opérateur.** Je suis ton Superviseur.
 
-Superviseur Virtuel pour Opérateurs Juniors (Bac Pro). **Rappel de sécurité :** Utilise uniquement des données fictives.
+Nous allons analyser le travail que tu as réalisé aujourd'hui.
+**Rappel :** Utilise des données fictives (ne donne pas les vrais noms des clients).
 
-**Sur quel BLOC DE COMPÉTENCES souhaites-tu travailler ?**
+**Dans quel BLOC s'inscrit ton activité ?**
 
-1. Gérer des relations avec les clients (GRCU).
-2. Organiser et suivre l’activité de production (OSP).
-3. Administrer le personnel (AP).
+1. Relation Clients / Usagers (GRCU)
+2. Organisation / Production (OSP)
+3. Administration du Personnel (AP)
 
-**Indique 1, 2 ou 3 pour commencer.**
+**Tape 1, 2 ou 3 pour commencer.**
 """
 
 def get_fallback_response(last_user_msg):
-    """Mode Simulation (Dernier recours si tout est cassé)"""
+    """
+    Mode Secours (Si l'IA est HS).
+    Ne propose plus de choix, mais pose des questions ouvertes.
+    """
     msg = last_user_msg.lower()
-    if "1" in msg or "client" in msg:
-        return "Noté Bloc 1. Quel est le contexte (Lieu, Interlocuteur) ?"
-    elif "2" in msg or "prod" in msg:
-        return "Noté Bloc 2. Quelle tâche as-tu réalisée ?"
-    elif "3" in msg or "perso" in msg:
-        return "Noté Bloc 3. Recrutement, paie ou gestion ?"
+    
+    # Si l'élève vient de choisir un bloc (1, 2 ou 3)
+    if msg in ["1", "bloc 1", "grcu"]:
+        return "C'est noté pour le Bloc 1 (Relation Client). **Quelle activité précise as-tu réalisée ?** Décris-moi la situation (Accueil, Téléphone, Courrier...)."
+    elif msg in ["2", "bloc 2", "osp"]:
+        return "C'est noté pour le Bloc 2 (Organisation). **Sur quelle tâche as-tu travaillé ?** (Classement, Planification, Gestion de stock...)."
+    elif msg in ["3", "bloc 3", "ap"]:
+        return "C'est noté pour le Bloc 3 (Personnel). **Quelle opération as-tu effectuée ?** (Congés, Recrutement, Paie...)."
+    
+    # Si la réponse est courte, on demande de développer
+    elif len(msg) < 10:
+        return "Peux-tu être plus précis ? Explique-moi les étapes de ton travail."
+    
+    # Questions génériques de relance
     else:
         return random.choice([
-            "Quels outils numériques as-tu utilisés ?",
-            "Pourquoi as-tu choisi cette méthode ?",
-            "Quelles difficultés as-tu rencontrées ?",
-            "Si tu devais refaire cette tâche, que changerais-tu ?"
-        ]) + " (Mode Simulation 🤖 - IA Saturée)"
+            "Très bien. Quels logiciels ou outils numériques as-tu utilisés pour faire cela ?",
+            "As-tu rencontré des difficultés particulières durant cette tâche ?",
+            "Pourquoi as-tu choisi de procéder ainsi ? Justifie ta méthode.",
+            "Si tu devais refaire cette activité, que changerais-tu pour être plus efficace ?"
+        ]) + " (Mode Relance 🛠️)"
 
-# --- 7. INTERFACE ---
-st.title("🏢 Agence Pro'AGOrA - Superviseur")
+# --- 6. INTERFACE ---
+st.title("🏢 Agence Pro'AGOrA")
+
+# Diagnostic silencieux (Bandeau vert uniquement si succès)
+if "groq_keys" in st.secrets:
+    if len(st.secrets["groq_keys"]) > 0:
+        st.success(f"✅ Système connecté ({len(st.secrets['groq_keys'])} clés actives)", icon="🟢")
+    else:
+        st.error("⚠️ Liste de clés vide dans les secrets.", icon="🔴")
+elif "GROQ_API_KEY" not in st.secrets:
+    st.error("⚠️ Aucune clé API configurée.", icon="🔴")
 
 if not st.session_state.messages:
     st.session_state.messages.append({"role": "assistant", "content": MENU_AGORA})
@@ -182,60 +169,40 @@ with st.sidebar:
     st.header("👤 Élève")
     student_id = st.text_input("Ton Prénom :", placeholder="Ex: Alex")
     
-    # Indicateur du nombre de clés trouvées (Discret)
-    keys_count = len(get_api_keys_list())
-    if keys_count > 0:
-        st.caption(f"🔑 Système actif : {keys_count} clés disponibles.")
-    else:
-        st.error("🔑 Aucune clé API détectée !")
+    st.markdown("---")
     
-    st.divider()
-    
-    st.header("🔧 Professeur / Dépannage")
-    with st.expander("🆘 Clé API de Secours (Si erreur 429)"):
-        st.caption("Si le bandeau rouge s'affiche ou que l'IA est saturée, collez une clé temporaire ici :")
-        manual_key = st.text_input("Clé Groq temporaire :", type="password")
-        if manual_key:
-            st.session_state.manual_api_key = manual_key
-            st.success("Clé de secours activée ! Elle sera utilisée en priorité.")
-    
-    st.divider()
-    
-    # Upload
-    uploaded_file = st.file_uploader("📂 Charger une session (CSV)", type=['csv'])
+    uploaded_file = st.file_uploader("📂 Reprendre une session (CSV)", type=['csv'])
     if uploaded_file:
         try:
             string_data = StringIO(uploaded_file.getvalue().decode('utf-8-sig')).read()
             load_session_from_df(pd.read_csv(StringIO(string_data), sep=';'))
-        except: st.error("Erreur lecture CSV")
+        except: st.error("Fichier invalide")
 
-    # Download
     if st.session_state.conversation_log:
         df = pd.DataFrame(st.session_state.conversation_log)
-        st.download_button("💾 Sauvegarder la session", df.to_csv(index=False, sep=';').encode('utf-8-sig'), f"session_{student_id}.csv", "text/csv")
+        st.download_button("💾 Sauvegarder mon travail", df.to_csv(index=False, sep=';').encode('utf-8-sig'), f"agora_{student_id}.csv", "text/csv")
     
-    if st.button("🗑️ Reset / Nouvelle Session"):
+    st.markdown("---")
+    if st.button("🗑️ Nouvelle Session"):
         st.session_state.messages = [{"role": "assistant", "content": MENU_AGORA}]
         st.session_state.conversation_log = []
-        if "manual_api_key" in st.session_state:
-            del st.session_state.manual_api_key
         st.rerun()
 
-# --- 8. LOGIQUE CHAT ---
+# --- 7. CHAT ---
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.write(msg["content"])
 
-if prompt := st.chat_input("Ta réponse..."):
+if prompt := st.chat_input("Décris ton activité ici..."):
     if not student_id:
-        st.toast("⚠️ N'oublie pas de mettre ton prénom à gauche !")
+        st.toast("⚠️ Entre ton prénom à gauche pour commencer !")
     else:
-        # Message Utilisateur
+        # Message Elève
         st.chat_message("user").write(prompt)
         st.session_state.messages.append({"role": "user", "content": prompt})
         save_log(student_id, "Eleve", prompt)
 
-        # Préparation du contexte (8 derniers messages seulement)
+        # Context (8 derniers messages)
         messages_api = [{"role": "system", "content": SYSTEM_PROMPT}]
         recent_history = st.session_state.messages[-8:] 
         for m in recent_history:
@@ -243,20 +210,14 @@ if prompt := st.chat_input("Ta réponse..."):
 
         # Réponse Assistant
         with st.chat_message("assistant"):
-            with st.spinner("Le superviseur analyse ta réponse..."):
+            with st.spinner("Analyse de l'activité..."):
+                reply, debug_info = query_groq_with_rotation(messages_api)
                 
-                # Appel API avec rotation automatique
-                reply, info_debug = query_groq_with_rotation(messages_api)
-                
-                if reply:
-                    st.write(reply)
-                    # Debug discret pour savoir quelle clé a travaillé
-                    # st.caption(f"⚡ {info_debug}") 
-                else:
-                    # Mode Secours si tout a échoué
+                if not reply:
+                    # Si l'IA échoue, on utilise le fallback "ouvert" (sans menu)
                     reply = get_fallback_response(prompt)
-                    st.write(reply)
-                    st.warning("⚠️ Toutes les clés API sont saturées. Passage en mode simulation.")
+                
+                st.write(reply)
             
             st.session_state.messages.append({"role": "assistant", "content": reply})
             save_log(student_id, "Assistant", reply)
