@@ -1,37 +1,32 @@
 import streamlit as st
 import pandas as pd
+import random
 from groq import Groq
 from datetime import datetime
-from gtts import gTTS
-import io
-import re
-import docx
-import random # Ajouté pour la rotation des clés
-from pypdf import PdfReader
+from io import StringIO
 
-# --- 1. CONFIGURATION ---
-st.set_page_config(page_title="1AGORA", page_icon="🏢", initial_sidebar_state="expanded")
+# --- 0. SÉCURITÉ & DÉPENDANCES ---
+try:
+    from docx import Document
+except ImportError:
+    st.error("⚠️ ERREUR CRITIQUE : Le module 'python-docx' manque. Ajoutez-le au fichier requirements.txt")
+    st.stop()
 
-# --- 2. GESTION DU STYLE (ACCESSIBILITÉ & SÉCURITÉ) ---
-if "mode_dys" not in st.session_state:
-    st.session_state.mode_dys = False
+# --- 1. CONFIGURATION DE LA PAGE ---
+st.set_page_config(
+    page_title="Superviseur Pro'AGOrA", 
+    page_icon="🎓",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-# CSS Global (Accessibilité + Bandeau Légal)
+# --- 2. STYLE CSS & FOOTER FIXE ---
 st.markdown("""
 <style>
-    /* STYLE DYSLEXIE (Si activé via Python) */
-    """ + ("""
-    html, body, [class*="css"] {
-        font-family: 'Verdana', sans-serif !important;
-        font-size: 18px !important;
-        line-height: 1.8 !important;
-        letter-spacing: 0.5px !important;
-    }
-    """ if st.session_state.mode_dys else "") + """
-
-    /* STYLE SÉCURITÉ (Footer Fixe) */
-    footer {visibility: hidden;} /* Cache le footer Streamlit par défaut */
+    footer {visibility: hidden;}
+    .reportview-container .main .block-container {padding-top: 2rem;}
     
+    /* BANDEAU LÉGAL FIXE EN BAS */
     .fixed-footer {
         position: fixed;
         left: 0;
@@ -47,13 +42,13 @@ st.markdown("""
         line-height: 1.4;
     }
 
-    /* Remonter la zone de saisie pour ne pas être cachée par le footer */
+    /* Remonter la zone de saisie */
     [data-testid="stBottom"] {
         bottom: 60px !important;
         padding-bottom: 0px !important;
     }
-
-    /* Alerte latérale */
+    
+    /* Alerte Latérale */
     .sidebar-alert {
         padding: 1rem;
         background-color: #ffebee;
@@ -68,31 +63,23 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.title("♾️ Agence PRO'AGORA")
-st.caption("Simulation Professionnelle Gamifiée")
-
-# --- 3. GESTION DES CLÉS API (ROTATION SÉCURISÉE) ---
+# --- 3. GESTION DES CLÉS API (ROTATION) ---
 def get_api_keys_list():
-    """Récupère les clés depuis les secrets (liste ou clé unique)"""
     if "groq_keys" in st.secrets:
         return st.secrets["groq_keys"]
     elif "GROQ_API_KEY" in st.secrets:
         return [st.secrets["GROQ_API_KEY"]]
     return []
 
-def query_groq_secure(messages):
-    """Essaie plusieurs clés et modèles pour éviter les blocages"""
+def query_groq_with_rotation(messages):
     available_keys = get_api_keys_list()
-    
     if not available_keys:
-        return "⚠️ ERREUR CONFIG : Aucune clé API trouvée. Contacte ton professeur."
+        return None, "ERREUR CONFIG : Aucune clé API trouvée."
     
-    # Mélange aléatoire des clés pour répartir la charge
     keys_to_try = list(available_keys)
     random.shuffle(keys_to_try)
-    
-    # Modèles à tester (du plus rapide au plus performant)
-    models = ["llama-3.1-8b-instant", "llama-3.3-70b-versatile", "mixtral-8x7b-32768"]
+    # Llama 3 70b est le meilleur pour l'analyse de documents
+    models = ["llama-3.3-70b-versatile", "mixtral-8x7b-32768", "llama-3.1-8b-instant"]
 
     for key in keys_to_try:
         try:
@@ -102,290 +89,190 @@ def query_groq_secure(messages):
                     chat = client.chat.completions.create(
                         messages=messages,
                         model=model,
-                        temperature=0.7,
+                        temperature=0.5, # Température basse pour éviter les hallucinations
                         max_tokens=1024, 
                     )
-                    return chat.choices[0].message.content
-                except Exception:
-                    continue # Essaie le modèle suivant
-        except Exception:
-            continue # Essaie la clé suivante
-            
-    return "⚠️ SATURATION SERVICE : Tous les modèles sont occupés. Réessaie dans 1 minute."
+                    return chat.choices[0].message.content, model
+                except: continue 
+        except: continue
+    return None, "SATURATION SERVICE."
 
-# --- 4. FONCTIONS UTILITAIRES ---
-def extract_text_from_file(uploaded_file):
-    text = ""
+# --- 4. TRAITEMENT FICHIERS WORD ---
+def extract_text_from_docx(file):
     try:
-        if uploaded_file.name.endswith(".docx"):
-            doc = docx.Document(uploaded_file)
-            for para in doc.paragraphs: text += para.text + "\n"
-        elif uploaded_file.name.endswith(".pdf"):
-            reader = PdfReader(uploaded_file)
-            for page in reader.pages: text += page.extract_text() + "\n"
-        elif uploaded_file.name.endswith(".txt"):
-            text = uploaded_file.read().decode("utf-8")
+        doc = Document(file)
+        full_text = []
+        for para in doc.paragraphs:
+            if para.text.strip():
+                full_text.append(para.text)
+        text = "\n".join(full_text)
+        
+        # SÉCURITÉ : Limite de taille (environ 2-3 pages max) pour ne pas saturer l'IA
+        if len(text) > 8000:
+            text = text[:8000] + "\n\n[...TEXTE TRONQUÉ CAR TROP LONG...]"
         return text
-    except Exception as e: return f"Erreur lecture : {e}"
+    except Exception as e:
+        return f"Erreur de lecture : {str(e)}"
 
-def clean_text_for_audio(text):
-    text = re.sub(r'[\*_]{1,3}', '', text) # Enlève gras/italique
-    text = re.sub(r'#+', '', text) # Enlève titres
-    text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', text) # Enlève liens
-    text = re.sub(r'^\s*-\s+', '', text, flags=re.MULTILINE) # Enlève puces
-    return text
+# --- 5. INITIALISATION SESSION ---
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+if "logs" not in st.session_state:
+    st.session_state.logs = []
 
-# --- 5. STRUCTURE DU LIVRE (TITRES PROPRES) ---
-DB_PREMIERE = {
-    "GESTION DES ESPACES DE TRAVAIL": {
-        "Aménagement des espaces": "COMPÉTENCE : Proposer un aménagement de bureau ergonomique et choisir le mobilier adapté.",
-        "Environnement numérique": "COMPÉTENCE : Lister le matériel informatique, les logiciels et vérifier les règles RGPD.",
-        "Ressources partagées": "COMPÉTENCE : Gérer le stock de fournitures (commandes/partage) et les réservations (salles/véhicules).",
-        "Partage de l'information": "COMPÉTENCE : Améliorer la communication interne (Note de service, Outils collaboratifs, Agenda)."
-    },
-    "GESTION DES RELATIONS PARTENAIRES": {
-        "Lancement produit / Vente": "COMPÉTENCE : Planifier des tâches (Planigramme), Négocier un prix de vente, Communication commerciale.",
-        "Organisation de réunions": "COMPÉTENCE : Convoquer les participants, Réserver la salle, Préparer l'ordre du jour, Rédiger le Compte-Rendu.",
-        "Organisation déplacement": "COMPÉTENCE : Réserver un déplacement (Train/Avion/Hôtel) avec budget contraint. Établir l'Ordre de Mission."
-    },
-    "GESTION DES RESSOURCES HUMAINES": {
-        "Recrutement": "COMPÉTENCE : Définir le Profil de poste, Rédiger l'annonce d'embauche, Trier des CV.",
-        "Intégration du personnel": "COMPÉTENCE : Préparer l'arrivée (matériel, badges), Créer le livret d'accueil, Organiser l'accueil.",
-        "Dossiers du personnel": "COMPÉTENCE : Rédiger un Contrat de travail, Mettre à jour le Registre Unique du Personnel, Faire un Avenant."
-    },
-    "SCÉNARIOS TRANSVERSAUX": {
-        "Réorganisation complète": "COMPÉTENCE : Projet global de déménagement ou de réaménagement des services.",
-        "Campagne de Recrutement": "COMPÉTENCE : Projet global de recrutement (de l'annonce à l'intégration)."
-    }
-}
-
-DB_SECONDE = {
-    "Révisions 2nde": {
-        "Accueil physique et téléphonique": "COMPÉTENCE : Accueil physique et téléphonique (Filtrage, Prise de message).",
-        "Gestion du courrier": "COMPÉTENCE : Tri du courrier (Arrivée/Départ) et Enregistrement.",
-        "Classement et Archivage": "COMPÉTENCE : Organisation de l'arborescence numérique."
-    }
-}
-
-# --- 6. GAMIFICATION ---
-GRADES = {
-    0: "👶 Stagiaire",
-    100: "👦 Assistant(e) Junior",
-    300: "👨‍💼 Assistant(e) Confirmé(e)",
-    600: "👩‍💻 Responsable de Pôle",
-    1000: "👑 Assistant(e) de Direction"
-}
-
-if "xp" not in st.session_state: st.session_state.xp = 0
-
-def get_grade(xp):
-    current_grade = "Stagiaire"
-    for palier, titre in GRADES.items():
-        if xp >= palier:
-            current_grade = titre
-    return current_grade
-
-def ajouter_xp():
-    st.session_state.xp += 50
-    st.balloons()
-    st.toast("Bravo ! +50 XP 🚀", icon="⭐")
-
-# --- 7. CERVEAU (PROMPT STRICT - GARDE-FOUS) ---
-def get_system_prompt(simplified_mode):
-    base_prompt = """
-    TU ES : Le Superviseur rigoureux de l'Agence PRO'AGORA.
-    TON OBJECTIF : Faire progresser l'élève par l'autonomie.
-    
-    ⛔ INTERDICTIONS ABSOLUES (TOLÉRANCE ZÉRO) :
-    1. NE JAMAIS DONNER LA RÉPONSE, ni complète, ni partielle.
-    2. NE JAMAIS RÉÉCRIRE le texte de l'élève (pas de reformulation, pas de correction orthographique directe).
-    3. NE JAMAIS FAIRE le travail demandé (si on demande un mail, tu ne rédiges pas de mail).
-
-    ✅ TA MÉTHODE PÉDAGOGIQUE (GUIDAGE UNIQUEMENT) :
-    - Si l'élève fait une erreur, dis-lui OÙ elle se trouve, mais pas COMMENT la corriger.
-      * Exemple INTERDIT : "Tu as écrit 'ses' au lieu de 'ces'."
-      * Exemple AUTORISÉ : "Attention, tu as une faute de grammaire dans le premier paragraphe, vérifie tes démonstratifs."
-    - Si l'élève est bloqué, donne un INDICE sur la méthodologie ou la ressource à consulter.
-      * Exemple : "Pour calculer la TVA, rappelle-toi du taux en vigueur pour ce type de produit."
-    - Fournis les DONNÉES du scénario (contexte, chiffres, noms) au début, puis laisse l'élève se débrouiller.
-    
-    TON TON : Professionnel, bienveillant mais ferme. Tu es un tuteur, pas un assistant de rédaction.
-    """
-    if simplified_mode:
-        base_prompt += """
-        ⚠️ MODE ACCESSIBILITÉ :
-        - Fais des phrases très courtes.
-        - Une idée par phrase.
-        - Utilise des listes à puces.
-        """
-    return base_prompt
-
-# --- 8. LOGS ---
-if "conversation_log" not in st.session_state: st.session_state.conversation_log = []
-if "messages" not in st.session_state: st.session_state.messages = []
-
-def save_log(student_id, role, content):
-    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    st.session_state.conversation_log.append({
-        "Heure": ts,
-        "Eleve": student_id,
+def log_interaction(student, role, content):
+    st.session_state.logs.append({
+        "Heure": datetime.now().strftime("%H:%M:%S"),
+        "Utilisateur": student,
         "Role": role,
-        "Message": content,
-        "XP_Sauvegarde": st.session_state.xp
+        "Message": content[:50]
     })
 
-def lancer_mission():
-    base = DB_PREMIERE if st.session_state.niveau_select == "1ère (Livre Foucher)" else DB_SECONDE
-    theme = st.session_state.theme_select
-    dossier = st.session_state.dossier_select
-    competence = base[theme][dossier]
-    
-    st.session_state.messages = []
-    # Prompt de démarrage
-    prompt_demarrage = f"""
-    CONTEXTE : Mission '{dossier}' ({competence}).
-    ACTION : Invente un scénario (Entreprise, Contexte, Chiffres).
-    CONSIGNE STRICTE : Donne les données à l'élève et la tâche à faire. NE FAIS PAS LA TÂCHE.
-    """
-    
-    msgs = [{"role": "system", "content": get_system_prompt(st.session_state.mode_simple)}]
-    msgs.append({"role": "user", "content": prompt_demarrage})
-    
-    # Appel Sécurisé avec Rotation
-    with st.spinner("Création de la mission..."):
-        intro_bot = query_groq_secure(msgs)
-        st.session_state.messages.append({"role": "assistant", "content": intro_bot})
+# --- 6. LE "SUPER PROMPT" PÉDAGOGIQUE (MODIFIÉ) ---
+SYSTEM_PROMPT = """
+RÔLE : Tu es le Superviseur Virtuel de l'Agence Pro'AGOrA.
+TON : Professionnel, encourageant mais exigeant (Vouvoiement).
+CIBLE : Élèves de Première Bac Pro.
+MISSION : Guider l'élève pour qu'il analyse sa propre pratique.
 
+⛔ INTERDICTIONS ABSOLUES :
+1. NE JAMAIS FAIRE LE TRAVAIL à la place de l'élève (ne rédige pas les mails, ne fais pas les calculs).
+2. NE PAS ÉCRIRE DE LONGS PARAGRAPHES. Tes réponses doivent être COURTES (max 3 phrases).
+3. Une seule question à la fois.
 
-# --- 9. INTERFACE SIDEBAR ---
+DÉROULEMENT :
+1. Si l'élève envoie un DOCUMENT (Word) : Analyse-le. Vérifie s'il respecte les codes professionnels (orthographe, formules de politesse, mentions obligatoires). Dis ce qui va, et pose UNE question sur ce qui manque.
+2. Si l'élève DISCUTE : Guide-le pas à pas.
+   - Demande sur quel BLOC (1, 2 ou 3) il travaille.
+   - Demande le contexte (Entreprise/Service).
+   - Demande les outils utilisés.
+   - Vérifie la cohérence.
+
+SÉCURITÉ : Si l'élève utilise un VRAI nom de famille ou une vraie entreprise, demande-lui d'anonymiser immédiatement.
+"""
+
+INITIAL_MESSAGE = """
+👋 **Bonjour Opérateur/Opératrice.**
+
+Bienvenue à l'Agence Pro'AGOrA. Je suis ton Superviseur Virtuel.
+
+**⚠️ SÉCURITÉ :** Utilise uniquement des données **FICTIVES** (Faux noms, fausses entreprises).
+
+**Pour commencer :**
+Sur quel BLOC travailles-tu (1, 2 ou 3) ?
+"""
+
+if not st.session_state.messages:
+    st.session_state.messages.append({"role": "assistant", "content": INITIAL_MESSAGE})
+
+# --- 7. INTERFACE GRAPHIQUE ---
+
+st.title("🎓 Supervision Agence Pro'AGOrA")
+
+# A. BARRE LATÉRALE
 with st.sidebar:
-    st.header("👤 Profil")
+    st.image("https://img.icons8.com/color/96/student-center.png", width=80)
+    st.header("Profil Élève")
     
-    # --- ALERTE ROUGE ---
     st.markdown("""
     <div class="sidebar-alert">
-    🚫 INTERDIT : Ne jamais saisir de données personnelles réelles (RGPD).
+    🚫 INTERDIT : Ne jamais saisir de données personnelles réelles.
     </div>
     """, unsafe_allow_html=True)
-    # --------------------
+    
+    student_name = st.text_input("Ton Prénom (seulement) :", placeholder="Ex: Thomas")
+    
+    st.divider()
+    
+    # --- ZONE DÉPÔT DE PRODUCTION (WORD) ---
+    st.subheader("📂 Déposer ma production")
+    st.caption("Dépose ton fichier Word (.docx) ici pour correction.")
+    uploaded_file = st.file_uploader("Choisir un fichier", type=['docx'], label_visibility="collapsed")
+    
+    if uploaded_file and student_name:
+        if st.button("🚀 Envoyer à la correction"):
+            with st.spinner("Lecture et analyse en cours..."):
+                text_content = extract_text_from_docx(uploaded_file)
+                
+                # Injection d'un prompt spécifique pour l'analyse de fichier
+                prompt_analysis = f"Voici ma production (Fichier Word : {uploaded_file.name}) :\n\n{text_content}"
+                
+                st.session_state.messages.append({"role": "user", "content": prompt_analysis})
+                log_interaction(student_name, "Eleve", f"Upload: {uploaded_file.name}")
+                st.rerun() # On recharge pour laisser l'IA répondre
 
-    student_id = st.text_input("Prénom :", key="prenom_eleve")
-    
-    # Gamification
-    grade_actuel = get_grade(st.session_state.xp)
-    st.metric("Niveau & XP", value=f"{st.session_state.xp} XP", delta=grade_actuel)
-    progress_val = min(st.session_state.xp / 1000, 1.0)
-    st.progress(progress_val)
-    
-    st.markdown("---")
-    st.header("♿ Accessibilité")
-    st.session_state.mode_dys = st.checkbox("👁️ DYS (Gros caractères)")
-    st.session_state.mode_simple = st.checkbox("🧠 Consignes Simplifiées")
-    st.session_state.mode_audio = st.checkbox("🔊 Lecture Audio")
+    st.divider()
 
-    st.markdown("---")
-    st.header("🗂️ Missions")
-    niveau = st.radio("Livre :", ["1ère (Livre Foucher)", "2nde (Révisions)"], key="niveau_select")
-    base_active = DB_PREMIERE if niveau == "1ère (Livre Foucher)" else DB_SECONDE
-    theme = st.selectbox("Thème :", list(base_active.keys()), key="theme_select")
-    dossier = st.selectbox("Mission :", list(base_active[theme].keys()), key="dossier_select")
+    # --- ZONE SAUVEGARDE & REPRISE ---
+    st.subheader("💾 Sauvegarde")
+    if len(st.session_state.messages) > 1:
+        chat_df = pd.DataFrame(st.session_state.messages)
+        csv_data = chat_df.to_csv(index=False).encode('utf-8')
+        filename = f"agora_{student_name if student_name else 'anonyme'}.csv"
+        st.download_button("📥 Télécharger ma session", csv_data, filename, "text/csv")
     
-    col1, col2 = st.columns(2)
-    with col1:
-        st.button("🚀 LANCER", type="primary", on_click=lancer_mission)
-    with col2:
-        st.button("✅ FINIR", on_click=ajouter_xp)
-
-    st.markdown("---")
-    # Sauvegarde
-    if st.session_state.conversation_log:
-        df = pd.DataFrame(st.session_state.conversation_log)
-        csv = df.to_csv(index=False, sep=';').encode('utf-8-sig')
-        st.download_button("📥 Télécharger (CSV)", csv, "suivi_1agora.csv", "text/csv")
-    
-    # Reprise
-    uploaded_csv = st.file_uploader("Reprendre (CSV)", type=['csv'])
-    if uploaded_csv and st.button("🔄 Restaurer"):
+    uploaded_session = st.file_uploader("Reprendre une session (.csv)", type=['csv'])
+    if uploaded_session and st.button("🔄 Restaurer"):
         try:
-            df_hist = pd.read_csv(uploaded_csv, sep=';')
-            st.session_state.messages = []
-            st.session_state.conversation_log = []
-            if 'XP_Sauvegarde' in df_hist.columns:
-                st.session_state.xp = int(df_hist['XP_Sauvegarde'].iloc[-1])
-            for _, row in df_hist.iterrows():
-                role_chat = "user" if row['Role'] == "Eleve" else "assistant"
-                st.session_state.messages.append({"role": role_chat, "content": row['Message']})
-                save_log(row.get('Eleve', student_id), row['Role'], row['Message'])
-            st.success(f"Restauré ! Niveau : {st.session_state.xp} XP")
-            st.rerun()
-        except: st.error("Fichier invalide.")
-
-# --- 10. CHAT & AUDIO ---
-if not st.session_state.messages:
-    st.info("👋 Bonjour ! Configure tes options à gauche et lance une mission.")
-else:
-    for i, msg in enumerate(st.session_state.messages):
-        st.chat_message(msg["role"]).write(msg["content"])
-        
-        # LECTEUR AUDIO
-        if st.session_state.mode_audio and msg["role"] == "assistant":
-            if f"audio_{i}" not in st.session_state:
-                try:
-                    clean_text = clean_text_for_audio(msg["content"])
-                    tts = gTTS(text=clean_text, lang='fr')
-                    audio_buffer = io.BytesIO()
-                    tts.write_to_fp(audio_buffer)
-                    st.session_state[f"audio_{i}"] = audio_buffer
-                except: pass
-            if f"audio_{i}" in st.session_state:
-                st.audio(st.session_state[f"audio_{i}"], format="audio/mp3")
-
-    # DÉPÔT FICHIER
-    with st.expander("📎 Joindre un fichier (Word/PDF)"):
-        uploaded_doc = st.file_uploader("Fichier à corriger", type=['docx', 'pdf', 'txt'], key="doc_upload")
-        if uploaded_doc and st.button("Envoyer fichier"):
-            content = extract_text_from_file(uploaded_doc)
-            user_msg = f"📄 Fichier **{uploaded_doc.name}** : {content}"
-            st.chat_message("user").write(f"📄 *Fichier envoyé : {uploaded_doc.name}*")
-            st.session_state.messages.append({"role": "user", "content": user_msg})
-            save_log(student_id, "Eleve", f"[FICHIER] {uploaded_doc.name}")
-            
-            # Appel Sécurisé avec Rotation
-            memoire_courte = st.session_state.messages[-10:]
-            msgs = [{"role": "system", "content": get_system_prompt(st.session_state.mode_simple)}] + [{"role": m["role"], "content": m["content"]} for m in memoire_courte]
-            
-            with st.spinner("Analyse du document..."):
-                rep = query_groq_secure(msgs)
-                st.chat_message("assistant").write(rep)
-                st.session_state.messages.append({"role": "assistant", "content": rep})
-                save_log(student_id, "Superviseur", rep)
+            df_restored = pd.read_csv(uploaded_session)
+            if 'role' in df_restored.columns and 'content' in df_restored.columns:
+                st.session_state.messages = df_restored.to_dict('records')
+                st.success("✅ Session restaurée !")
                 st.rerun()
+        except: st.error("❌ Fichier invalide.")
 
-    # SAISIE
-    if prompt := st.chat_input("Votre réponse..."):
-        if not student_id: st.warning("⚠️ Prénom requis !")
-        else:
-            st.chat_message("user").write(prompt)
-            st.session_state.messages.append({"role": "user", "content": prompt})
-            save_log(student_id, "Eleve", prompt)
-            
-            # Appel Sécurisé avec Rotation
-            memoire_courte = st.session_state.messages[-10:]
-            msgs = [{"role": "system", "content": get_system_prompt(st.session_state.mode_simple)}] + [{"role": m["role"], "content": m["content"]} for m in memoire_courte]
-            
-            with st.spinner("Réflexion..."):
-                rep = query_groq_secure(msgs)
-                st.chat_message("assistant").write(rep)
-                st.session_state.messages.append({"role": "assistant", "content": rep})
-                save_log(student_id, "Superviseur", rep)
-                st.rerun()
+    st.divider()
+    if st.button("🗑️ Effacer tout"):
+        st.session_state.messages = [{"role": "assistant", "content": INITIAL_MESSAGE}]
+        st.session_state.logs = []
+        st.rerun()
 
-# --- 11. INJECTION DU FOOTER (BANDEAU PERMANENT) ---
+# B. ZONE DE CHAT
+chat_container = st.container()
+with chat_container:
+    for msg in st.session_state.messages:
+        with st.chat_message(msg["role"], avatar="🤖" if msg["role"] == "assistant" else "🧑‍🎓"):
+            # Si c'est le contenu brut du fichier Word, on le cache dans un menu déroulant pour ne pas polluer l'écran
+            if "Voici ma production (Fichier Word" in msg["content"]:
+                with st.expander("📄 Voir le contenu du fichier analysé"):
+                    st.write(msg["content"])
+            else:
+                st.markdown(msg["content"])
+    st.write("<br><br><br>", unsafe_allow_html=True)
+
+# C. BANDEAU LÉGAL
 st.markdown("""
 <div class="fixed-footer">
     ℹ️ <b>Outil Pédagogique Expérimental (IA)</b><br>
-    Cet assistant est une Intelligence Artificielle. Il peut commettre des erreurs. 
-    Vérifiez toujours les informations avec votre professeur. 
+    Cet assistant peut commettre des erreurs. Vérifiez toujours avec votre professeur. 
     Aucune donnée personnelle ne doit être saisie ici.
 </div>
 """, unsafe_allow_html=True)
+
+# D. LOGIQUE DE RÉPONSE IA
+# Vérifie si le dernier message vient de l'utilisateur (ou d'un upload fichier)
+if st.session_state.messages[-1]["role"] == "user":
+    with st.chat_message("assistant", avatar="🤖"):
+        with st.spinner("Analyse du superviseur..."):
+            messages_payload = [{"role": "system", "content": SYSTEM_PROMPT}]
+            # On garde les 10 derniers messages pour le contexte
+            messages_payload.extend(st.session_state.messages[-10:])
+            
+            response_content, _ = query_groq_with_rotation(messages_payload)
+            
+            if not response_content:
+                response_content = "⚠️ Mes systèmes sont saturés. Peux-tu répéter ?"
+            
+            st.markdown(response_content)
+            
+    st.session_state.messages.append({"role": "assistant", "content": response_content})
+    # Pas de st.rerun() ici pour éviter une boucle infinie, Streamlit gère l'affichage séquentiel
+
+# E. SAISIE UTILISATEUR (CHAT)
+if user_input := st.chat_input("Réponds au superviseur ici..."):
+    if not student_name:
+        st.toast("⚠️ Indique ton prénom à gauche !", icon="👉")
+    else:
+        st.session_state.messages.append({"role": "user", "content": user_input})
+        log_interaction(student_name, "User", user_input)
+        st.rerun()
