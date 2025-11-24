@@ -116,19 +116,33 @@ def ajouter_xp():
     st.balloons()
     st.toast("Bravo ! +50 XP 🚀", icon="⭐")
 
-# --- 7. CERVEAU (PROMPT) ---
+# --- 7. CERVEAU (PROMPT STRICT 0% RÉPONSE) ---
 def get_system_prompt(simplified_mode):
     base_prompt = """
-    TU ES : Le Superviseur de l'Agence PRO'AGORA.
-    RÈGLES DU JEU :
-    1. L'élève choisit une mission. TU DOIS INVENTER un scénario d'entreprise aléatoire (Nom, Chiffres, Contexte) immédiatement.
-    2. Fournis les données brutes dès le début.
-    3. Ne fais jamais le travail à la place de l'élève.
-    4. À la fin, génère un BILAN D'ÉVALUATION (Points forts / Points à améliorer).
+    TU ES : Le Superviseur rigoureux de l'Agence PRO'AGORA.
+    TON OBJECTIF : Faire progresser l'élève par l'autonomie.
+    
+    ⛔ INTERDICTIONS ABSOLUES (TOLÉRANCE ZÉRO) :
+    1. NE JAMAIS DONNER LA RÉPONSE, ni complète, ni partielle.
+    2. NE JAMAIS RÉÉCRIRE le texte de l'élève (pas de reformulation, pas de correction orthographique directe).
+    3. NE JAMAIS FAIRE le travail demandé (si on demande un mail, tu ne rédiges pas de mail).
+
+    ✅ TA MÉTHODE PÉDAGOGIQUE (GUIDAGE UNIQUEMENT) :
+    - Si l'élève fait une erreur, dis-lui OÙ elle se trouve, mais pas COMMENT la corriger.
+      * Exemple INTERDIT : "Tu as écrit 'ses' au lieu de 'ces'."
+      * Exemple AUTORISÉ : "Attention, tu as une faute de grammaire dans le premier paragraphe, vérifie tes démonstratifs."
+    - Si l'élève est bloqué, donne un INDICE sur la méthodologie ou la ressource à consulter.
+      * Exemple : "Pour calculer la TVA, rappelle-toi du taux en vigueur pour ce type de produit."
+    - Fournis les DONNÉES du scénario (contexte, chiffres, noms) au début, puis laisse l'élève se débrouiller.
+    
+    TON TON : Professionnel, bienveillant mais ferme. Tu es un tuteur, pas un assistant de rédaction.
     """
     if simplified_mode:
         base_prompt += """
-        ⚠️ MODE ACCESSIBILITÉ : Fais des phrases courtes. Utilise des listes à puces. Mets les mots clés en GRAS.
+        ⚠️ MODE ACCESSIBILITÉ :
+        - Fais des phrases très courtes.
+        - Une idée par phrase.
+        - Utilise des listes à puces.
         """
     return base_prompt
 
@@ -153,14 +167,19 @@ def lancer_mission():
     competence = base[theme][dossier]
     
     st.session_state.messages = []
-    prompt_demarrage = f"Mission : '{dossier}' ({competence}). Invente le scénario et donne les consignes."
+    # Prompt de démarrage renforcé
+    prompt_demarrage = f"""
+    CONTEXTE : Mission '{dossier}' ({competence}).
+    ACTION : Invente un scénario (Entreprise, Contexte, Chiffres).
+    CONSIGNE STRICTE : Donne les données à l'élève et la tâche à faire. NE FAIS PAS LA TÂCHE.
+    """
     
     try:
         msgs = [{"role": "system", "content": get_system_prompt(st.session_state.mode_simple)}]
         msgs.append({"role": "user", "content": prompt_demarrage})
         
-        # MODIFICATION 1 : Modèle plus léger
-        completion = client.chat.completions.create(messages=msgs, model="llama-3.1-8b-instant", temperature=0.8)
+        # Modèle 8b (économique et rapide)
+        completion = client.chat.completions.create(messages=msgs, model="llama-3.1-8b-instant", temperature=0.7)
         intro_bot = completion.choices[0].message.content
         st.session_state.messages.append({"role": "assistant", "content": intro_bot})
     except Exception as e:
@@ -229,55 +248,4 @@ else:
         
         # LECTEUR AUDIO
         if st.session_state.mode_audio and msg["role"] == "assistant":
-            if f"audio_{i}" not in st.session_state:
-                try:
-                    clean_text = clean_text_for_audio(msg["content"])
-                    tts = gTTS(text=clean_text, lang='fr')
-                    audio_buffer = io.BytesIO()
-                    tts.write_to_fp(audio_buffer)
-                    st.session_state[f"audio_{i}"] = audio_buffer
-                except: pass
-            if f"audio_{i}" in st.session_state:
-                st.audio(st.session_state[f"audio_{i}"], format="audio/mp3")
-
-    # DÉPÔT FICHIER
-    with st.expander("📎 Joindre un fichier (Word/PDF)"):
-        uploaded_doc = st.file_uploader("Fichier à corriger", type=['docx', 'pdf', 'txt'], key="doc_upload")
-        if uploaded_doc and st.button("Envoyer fichier"):
-            content = extract_text_from_file(uploaded_doc)
-            user_msg = f"📄 Fichier **{uploaded_doc.name}** : {content}"
-            st.chat_message("user").write(f"📄 *Fichier envoyé : {uploaded_doc.name}*")
-            st.session_state.messages.append({"role": "user", "content": user_msg})
-            save_log(student_id, "Eleve", f"[FICHIER] {uploaded_doc.name}")
-            try:
-                # MODIFICATION 2 : Mémoire courte (10 msg) + Modèle 8b
-                memoire_courte = st.session_state.messages[-10:]
-                msgs = [{"role": "system", "content": get_system_prompt(st.session_state.mode_simple)}] + [{"role": m["role"], "content": m["content"]} for m in memoire_courte]
-                
-                completion = client.chat.completions.create(messages=msgs, model="llama-3.1-8b-instant", temperature=0.7)
-                rep = completion.choices[0].message.content
-                st.chat_message("assistant").write(rep)
-                st.session_state.messages.append({"role": "assistant", "content": rep})
-                save_log(student_id, "Superviseur", rep)
-                st.rerun()
-            except Exception as e: st.error(f"Erreur : {e}")
-
-    # SAISIE
-    if prompt := st.chat_input("Votre réponse..."):
-        if not student_id: st.warning("⚠️ Prénom requis !")
-        else:
-            st.chat_message("user").write(prompt)
-            st.session_state.messages.append({"role": "user", "content": prompt})
-            save_log(student_id, "Eleve", prompt)
-            try:
-                # MODIFICATION 2 : Mémoire courte (10 msg) + Modèle 8b
-                memoire_courte = st.session_state.messages[-10:]
-                msgs = [{"role": "system", "content": get_system_prompt(st.session_state.mode_simple)}] + [{"role": m["role"], "content": m["content"]} for m in memoire_courte]
-                
-                completion = client.chat.completions.create(messages=msgs, model="llama-3.1-8b-instant", temperature=0.7)
-                rep = completion.choices[0].message.content
-                st.chat_message("assistant").write(rep)
-                st.session_state.messages.append({"role": "assistant", "content": rep})
-                save_log(student_id, "Superviseur", rep)
-                st.rerun()
-            except Exception as e: st.error(f"Erreur : {e}")
+            if f"audio_{i}" not in st.
