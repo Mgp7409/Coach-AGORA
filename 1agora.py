@@ -6,38 +6,112 @@ from gtts import gTTS
 import io
 import re
 import docx
+import random # Ajouté pour la rotation des clés
 from pypdf import PdfReader
 
 # --- 1. CONFIGURATION ---
 st.set_page_config(page_title="1AGORA", page_icon="🏢", initial_sidebar_state="expanded")
 
-# --- 2. GESTION DU STYLE (ACCESSIBILITÉ) ---
+# --- 2. GESTION DU STYLE (ACCESSIBILITÉ & SÉCURITÉ) ---
 if "mode_dys" not in st.session_state:
     st.session_state.mode_dys = False
 
-# Si Mode DYS activé : Police adaptée et gros caractères
-if st.session_state.mode_dys:
-    st.markdown("""
-    <style>
+# CSS Global (Accessibilité + Bandeau Légal)
+st.markdown("""
+<style>
+    /* STYLE DYSLEXIE (Si activé via Python) */
+    """ + ("""
     html, body, [class*="css"] {
         font-family: 'Verdana', sans-serif !important;
         font-size: 18px !important;
         line-height: 1.8 !important;
         letter-spacing: 0.5px !important;
     }
-    </style>
-    """, unsafe_allow_html=True)
+    """ if st.session_state.mode_dys else "") + """
+
+    /* STYLE SÉCURITÉ (Footer Fixe) */
+    footer {visibility: hidden;} /* Cache le footer Streamlit par défaut */
+    
+    .fixed-footer {
+        position: fixed;
+        left: 0;
+        bottom: 0;
+        width: 100%;
+        background-color: #f8f9fa;
+        color: #555;
+        text-align: center;
+        padding: 8px 10px;
+        font-size: 12px;
+        border-top: 1px solid #e1e4e8;
+        z-index: 99999;
+        line-height: 1.4;
+    }
+
+    /* Remonter la zone de saisie pour ne pas être cachée par le footer */
+    [data-testid="stBottom"] {
+        bottom: 60px !important;
+        padding-bottom: 0px !important;
+    }
+
+    /* Alerte latérale */
+    .sidebar-alert {
+        padding: 1rem;
+        background-color: #ffebee;
+        border: 1px solid #ffcdd2;
+        color: #c62828;
+        border-radius: 5px;
+        font-weight: bold;
+        font-size: 0.9rem;
+        margin-bottom: 1rem;
+        text-align: center;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 st.title("♾️ Agence PRO'AGORA")
 st.caption("Simulation Professionnelle Gamifiée")
 
-# --- 3. CONNEXION ---
-try:
-    api_key = st.secrets["GROQ_API_KEY"]
-    client = Groq(api_key=api_key)
-except:
-    st.error("⚠️ Clé API manquante. Vérifiez votre fichier .streamlit/secrets.toml")
-    st.stop()
+# --- 3. GESTION DES CLÉS API (ROTATION SÉCURISÉE) ---
+def get_api_keys_list():
+    """Récupère les clés depuis les secrets (liste ou clé unique)"""
+    if "groq_keys" in st.secrets:
+        return st.secrets["groq_keys"]
+    elif "GROQ_API_KEY" in st.secrets:
+        return [st.secrets["GROQ_API_KEY"]]
+    return []
+
+def query_groq_secure(messages):
+    """Essaie plusieurs clés et modèles pour éviter les blocages"""
+    available_keys = get_api_keys_list()
+    
+    if not available_keys:
+        return "⚠️ ERREUR CONFIG : Aucune clé API trouvée. Contacte ton professeur."
+    
+    # Mélange aléatoire des clés pour répartir la charge
+    keys_to_try = list(available_keys)
+    random.shuffle(keys_to_try)
+    
+    # Modèles à tester (du plus rapide au plus performant)
+    models = ["llama-3.1-8b-instant", "llama-3.3-70b-versatile", "mixtral-8x7b-32768"]
+
+    for key in keys_to_try:
+        try:
+            client = Groq(api_key=key)
+            for model in models:
+                try:
+                    chat = client.chat.completions.create(
+                        messages=messages,
+                        model=model,
+                        temperature=0.7,
+                        max_tokens=1024, 
+                    )
+                    return chat.choices[0].message.content
+                except Exception:
+                    continue # Essaie le modèle suivant
+        except Exception:
+            continue # Essaie la clé suivante
+            
+    return "⚠️ SATURATION SERVICE : Tous les modèles sont occupés. Réessaie dans 1 minute."
 
 # --- 4. FONCTIONS UTILITAIRES ---
 def extract_text_from_file(uploaded_file):
@@ -174,20 +248,27 @@ def lancer_mission():
     CONSIGNE STRICTE : Donne les données à l'élève et la tâche à faire. NE FAIS PAS LA TÂCHE.
     """
     
-    try:
-        msgs = [{"role": "system", "content": get_system_prompt(st.session_state.mode_simple)}]
-        msgs.append({"role": "user", "content": prompt_demarrage})
-        
-        # Modèle 8b (économique et rapide)
-        completion = client.chat.completions.create(messages=msgs, model="llama-3.1-8b-instant", temperature=0.7)
-        intro_bot = completion.choices[0].message.content
+    msgs = [{"role": "system", "content": get_system_prompt(st.session_state.mode_simple)}]
+    msgs.append({"role": "user", "content": prompt_demarrage})
+    
+    # Appel Sécurisé avec Rotation
+    with st.spinner("Création de la mission..."):
+        intro_bot = query_groq_secure(msgs)
         st.session_state.messages.append({"role": "assistant", "content": intro_bot})
-    except Exception as e:
-        st.error(f"Erreur IA : {e}")
+
 
 # --- 9. INTERFACE SIDEBAR ---
 with st.sidebar:
     st.header("👤 Profil")
+    
+    # --- ALERTE ROUGE ---
+    st.markdown("""
+    <div class="sidebar-alert">
+    🚫 INTERDIT : Ne jamais saisir de données personnelles réelles (RGPD).
+    </div>
+    """, unsafe_allow_html=True)
+    # --------------------
+
     student_id = st.text_input("Prénom :", key="prenom_eleve")
     
     # Gamification
@@ -268,18 +349,17 @@ else:
             st.chat_message("user").write(f"📄 *Fichier envoyé : {uploaded_doc.name}*")
             st.session_state.messages.append({"role": "user", "content": user_msg})
             save_log(student_id, "Eleve", f"[FICHIER] {uploaded_doc.name}")
-            try:
-                # Mémoire limitée (10 derniers messages)
-                memoire_courte = st.session_state.messages[-10:]
-                msgs = [{"role": "system", "content": get_system_prompt(st.session_state.mode_simple)}] + [{"role": m["role"], "content": m["content"]} for m in memoire_courte]
-                
-                completion = client.chat.completions.create(messages=msgs, model="llama-3.1-8b-instant", temperature=0.7)
-                rep = completion.choices[0].message.content
+            
+            # Appel Sécurisé avec Rotation
+            memoire_courte = st.session_state.messages[-10:]
+            msgs = [{"role": "system", "content": get_system_prompt(st.session_state.mode_simple)}] + [{"role": m["role"], "content": m["content"]} for m in memoire_courte]
+            
+            with st.spinner("Analyse du document..."):
+                rep = query_groq_secure(msgs)
                 st.chat_message("assistant").write(rep)
                 st.session_state.messages.append({"role": "assistant", "content": rep})
                 save_log(student_id, "Superviseur", rep)
                 st.rerun()
-            except Exception as e: st.error(f"Erreur : {e}")
 
     # SAISIE
     if prompt := st.chat_input("Votre réponse..."):
@@ -288,15 +368,24 @@ else:
             st.chat_message("user").write(prompt)
             st.session_state.messages.append({"role": "user", "content": prompt})
             save_log(student_id, "Eleve", prompt)
-            try:
-                # Mémoire limitée (10 derniers messages)
-                memoire_courte = st.session_state.messages[-10:]
-                msgs = [{"role": "system", "content": get_system_prompt(st.session_state.mode_simple)}] + [{"role": m["role"], "content": m["content"]} for m in memoire_courte]
-                
-                completion = client.chat.completions.create(messages=msgs, model="llama-3.1-8b-instant", temperature=0.7)
-                rep = completion.choices[0].message.content
+            
+            # Appel Sécurisé avec Rotation
+            memoire_courte = st.session_state.messages[-10:]
+            msgs = [{"role": "system", "content": get_system_prompt(st.session_state.mode_simple)}] + [{"role": m["role"], "content": m["content"]} for m in memoire_courte]
+            
+            with st.spinner("Réflexion..."):
+                rep = query_groq_secure(msgs)
                 st.chat_message("assistant").write(rep)
                 st.session_state.messages.append({"role": "assistant", "content": rep})
                 save_log(student_id, "Superviseur", rep)
                 st.rerun()
-            except Exception as e: st.error(f"Erreur : {e}")
+
+# --- 11. INJECTION DU FOOTER (BANDEAU PERMANENT) ---
+st.markdown("""
+<div class="fixed-footer">
+    ℹ️ <b>Outil Pédagogique Expérimental (IA)</b><br>
+    Cet assistant est une Intelligence Artificielle. Il peut commettre des erreurs. 
+    Vérifiez toujours les informations avec votre professeur. 
+    Aucune donnée personnelle ne doit être saisie ici.
+</div>
+""", unsafe_allow_html=True)
