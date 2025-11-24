@@ -13,7 +13,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- 2. CSS POUR L'INTERFACE ---
+# --- 2. CSS ---
 hide_css = """
 <style>
 footer {visibility: hidden;}
@@ -22,13 +22,31 @@ header {visibility: visible !important;}
 """
 st.markdown(hide_css, unsafe_allow_html=True)
 
-# --- 3. GROQ CLIENT INITIALISATION ---
-try:
-    api_key = os.environ.get("GROQ_API_KEY") or st.secrets["GROQ_API_KEY"]
-    client = Groq(api_key=api_key)
-except Exception as e:
-    st.error("Clé API Groq manquante. Vérifiez vos secrets.")
-    st.stop()
+# --- 3. FONCTIONS UTILITAIRES ---
+
+def get_api_key():
+    """
+    Récupère la clé API.
+    Priorité 1 : Clé entrée manuellement dans la sidebar (Secours)
+    Priorité 2 : Clé dans les secrets (Production)
+    Priorité 3 : Clé dans l'environnement (Local)
+    """
+    # 1. Vérifier si une clé de secours est entrée dans la session
+    if "manual_api_key" in st.session_state and st.session_state.manual_api_key:
+        return st.session_state.manual_api_key
+    
+    # 2. Sinon, chercher dans les secrets ou l'env
+    try:
+        return os.environ.get("GROQ_API_KEY") or st.secrets["GROQ_API_KEY"]
+    except:
+        return None
+
+def init_groq_client(api_key):
+    try:
+        if not api_key: return None
+        return Groq(api_key=api_key)
+    except:
+        return None
 
 # --- 4. GESTION DES LOGS ---
 if "conversation_log" not in st.session_state:
@@ -56,7 +74,7 @@ def load_session_from_df(df):
         })
     st.success("Session chargée.")
 
-# --- 5. INTELLIGENCE ARTIFICIELLE & MODE SECOURS ---
+# --- 5. LOGIQUE INTELLIGENCE ARTIFICIELLE ---
 
 SYSTEM_PROMPT = """
 Tu es le Superviseur Virtuel Pro'AGOrA (Bac Pro).
@@ -83,51 +101,50 @@ Superviseur Virtuel pour Opérateurs Juniors (Bac Pro). **Rappel de sécurité :
 """
 
 def get_fallback_response(last_user_msg):
-    """Génère une réponse sans IA (Mode Dégradé)"""
+    """Génère une réponse sans IA (Mode Simulation)"""
     msg = last_user_msg.lower()
     if "1" in msg or "client" in msg:
-        return "Noté pour le Bloc 1 (GRCU). Quel est le contexte de l'accueil ou de l'échange client (Lieu, Type d'interlocuteur) ?"
+        return "Noté pour le Bloc 1 (GRCU). Quel est le contexte (Lieu, Interlocuteur) ?"
     elif "2" in msg or "prod" in msg:
-        return "C'est parti pour le Bloc 2 (OSP). Quelle tâche de production ou d'organisation as-tu réalisée ?"
+        return "C'est parti pour le Bloc 2 (OSP). Quelle tâche as-tu réalisée ?"
     elif "3" in msg or "perso" in msg:
-        return "D'accord pour le Bloc 3 (Admin Personnel). S'agit-il d'un recrutement, d'une paie ou d'une gestion de dossier ?"
-    elif len(msg) < 5:
-        return "Peux-tu être plus précis ? Décris ta démarche avec des phrases complètes."
+        return "D'accord pour le Bloc 3 (Admin Personnel). Recrutement, paie ou gestion ?"
     else:
         responses = [
-            "Très bien. Quels outils numériques as-tu utilisés pour réaliser cette tâche ?",
-            "Peux-tu m'expliquer pourquoi tu as choisi cette méthode plutôt qu'une autre ?",
-            "Quelles difficultés as-tu rencontrées et comment les as-tu surmontées ?",
-            "C'est clair. Si tu devais refaire cette tâche, que changerais-tu pour être plus efficace ?",
-            "Parfait. Vérifie bien l'orthographe et la syntaxe pour ton rapport final."
+            "Quels outils numériques as-tu utilisés ?",
+            "Pourquoi as-tu choisi cette méthode ?",
+            "Quelles difficultés as-tu rencontrées ?",
+            "Si tu devais refaire cette tâche, que changerais-tu ?"
         ]
-        return random.choice(responses) + " (Réponse générée en mode secours 🛠️)"
+        return random.choice(responses) + " (Mode Simulation 🛠️)"
 
-def query_groq_with_fallback(messages):
-    """Tente plusieurs modèles, sinon passe en mode secours."""
-    # Liste des modèles par ordre de préférence (du plus léger au plus performant)
-    models_to_try = [
-        "llama-3.1-8b-instant",  # Rapide & Pas cher
-        "mixtral-8x7b-32768",    # Alternative fiable
-        "gemma2-9b-it"           # Google via Groq
-    ]
+def query_groq_optimized(messages, api_key):
+    """Essaie d'interroger l'API avec rotation de modèles."""
+    if not api_key:
+        return None, "Pas de clé"
+
+    client = Groq(api_key=api_key)
     
-    for model in models_to_try:
+    # Ordre : Modèle rapide -> Modèle performant -> Modèle Google
+    models = ["llama-3.1-8b-instant", "mixtral-8x7b-32768", "gemma2-9b-it"]
+    
+    for model in models:
         try:
-            chat_completion = client.chat.completions.create(
+            chat = client.chat.completions.create(
                 messages=messages,
                 model=model,
                 temperature=0.6,
                 max_tokens=600,
             )
-            return chat_completion.choices[0].message.content, model
+            return chat.choices[0].message.content, model
         except RateLimitError:
-            continue # Passe au modèle suivant
-        except Exception as e:
-            continue # Passe au modèle suivant
+            continue # Essayer le suivant
+        except APIConnectionError:
+            continue
+        except Exception:
+            continue
             
-    # Si tout échoue, on retourne None pour déclencher le mode secours
-    return None, "None"
+    return None, "Erreur 429"
 
 # --- 6. INTERFACE ---
 st.title("🏢 Agence Pro'AGOrA - Superviseur")
@@ -136,28 +153,32 @@ if not st.session_state.messages:
     st.session_state.messages.append({"role": "assistant", "content": MENU_AGORA})
 
 with st.sidebar:
-    st.header("Paramètres")
+    st.header("👤 Élève")
     student_id = st.text_input("Ton Prénom :", placeholder="Ex: Alex")
-    st.warning("⚠️ Règle d'Or : Données fictives uniquement.")
     
     st.divider()
     
-    # Upload
-    uploaded_file = st.file_uploader("📂 Charger session (CSV)", type=['csv'])
+    st.header("🔧 Professeur / Dépannage")
+    with st.expander("🆘 Clé API de Secours (Si erreur 429)"):
+        st.caption("Si l'IA est saturée, collez une nouvelle clé Groq ici pour reprendre immédiatement.")
+        manual_key = st.text_input("Clé Groq temporaire :", type="password")
+        if manual_key:
+            st.session_state.manual_api_key = manual_key
+            st.success("Clé temporaire active !")
+            
+    st.divider()
+    
+    # Upload/Download (Code identique avant)
+    uploaded_file = st.file_uploader("📂 Charger CSV", type=['csv'])
     if uploaded_file:
         try:
             string_data = StringIO(uploaded_file.getvalue().decode('utf-8-sig')).read()
             load_session_from_df(pd.read_csv(StringIO(string_data), sep=';'))
         except: st.error("Erreur lecture CSV")
 
-    # Download
     if st.session_state.conversation_log:
         df = pd.DataFrame(st.session_state.conversation_log)
-        st.download_button(
-            "💾 Sauvegarder", 
-            df.to_csv(index=False, sep=';').encode('utf-8-sig'), 
-            f"session_{student_id}.csv", "text/csv"
-        )
+        st.download_button("💾 Sauvegarder", df.to_csv(index=False, sep=';').encode('utf-8-sig'), f"session_{student_id}.csv", "text/csv")
     
     if st.button("🗑️ Reset"):
         st.session_state.messages = [{"role": "assistant", "content": MENU_AGORA}]
@@ -165,39 +186,39 @@ with st.sidebar:
         st.rerun()
 
 # --- 7. CHAT LOGIC ---
+current_api_key = get_api_key()
+
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.write(msg["content"])
 
 if prompt := st.chat_input("Ta réponse..."):
     if not student_id:
-        st.toast("⚠️ Entre ton prénom à gauche !")
+        st.toast("⚠️ Identifie-toi à gauche !")
     else:
-        # User message
         st.chat_message("user").write(prompt)
         st.session_state.messages.append({"role": "user", "content": prompt})
         save_log(student_id, "Eleve", prompt)
 
-        # Prepare context (Last 8 messages only)
+        # Contexte limité (8 derniers messages)
         messages_api = [{"role": "system", "content": SYSTEM_PROMPT}]
         recent_history = st.session_state.messages[-8:] 
         for m in recent_history:
             messages_api.append({"role": m["role"], "content": m["content"]})
 
-        # AI Response logic
         with st.chat_message("assistant"):
-            with st.spinner("Analyse en cours..."):
-                reply, model_used = query_groq_with_fallback(messages_api)
+            with st.spinner("Analyse..."):
+                reply, model_used = query_groq_optimized(messages_api, current_api_key)
                 
                 if reply:
                     st.write(reply)
-                    # Petit indicateur discret du modèle utilisé (utile pour debug)
-                    st.caption(f"🤖 Superviseur connecté via {model_used}")
+                    if model_used != "None":
+                        st.caption(f"⚡ Connecté ({model_used})")
                 else:
-                    # Mode Secours
+                    # Mode Simulation
                     reply = get_fallback_response(prompt)
                     st.write(reply)
-                    st.warning("⚠️ Réseau IA saturé (Erreur 429). Passage en mode 'Secours' automatique.")
+                    st.warning("⚠️ Mode Simulation (Réseau saturé). Pour réparer : Professeur > Clé de Secours.")
             
             st.session_state.messages.append({"role": "assistant", "content": reply})
             save_log(student_id, "Assistant", reply)
