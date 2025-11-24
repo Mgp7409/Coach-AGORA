@@ -116,7 +116,7 @@ def ajouter_xp():
     st.balloons()
     st.toast("Bravo ! +50 XP 🚀", icon="⭐")
 
-# --- 7. CERVEAU (PROMPT STRICT 0% RÉPONSE) ---
+# --- 7. CERVEAU (PROMPT STRICT - GARDE-FOUS) ---
 def get_system_prompt(simplified_mode):
     base_prompt = """
     TU ES : Le Superviseur rigoureux de l'Agence PRO'AGORA.
@@ -167,7 +167,7 @@ def lancer_mission():
     competence = base[theme][dossier]
     
     st.session_state.messages = []
-    # Prompt de démarrage renforcé
+    # Prompt de démarrage
     prompt_demarrage = f"""
     CONTEXTE : Mission '{dossier}' ({competence}).
     ACTION : Invente un scénario (Entreprise, Contexte, Chiffres).
@@ -248,4 +248,55 @@ else:
         
         # LECTEUR AUDIO
         if st.session_state.mode_audio and msg["role"] == "assistant":
-            if f"audio_{i}" not in st.
+            if f"audio_{i}" not in st.session_state:
+                try:
+                    clean_text = clean_text_for_audio(msg["content"])
+                    tts = gTTS(text=clean_text, lang='fr')
+                    audio_buffer = io.BytesIO()
+                    tts.write_to_fp(audio_buffer)
+                    st.session_state[f"audio_{i}"] = audio_buffer
+                except: pass
+            if f"audio_{i}" in st.session_state:
+                st.audio(st.session_state[f"audio_{i}"], format="audio/mp3")
+
+    # DÉPÔT FICHIER
+    with st.expander("📎 Joindre un fichier (Word/PDF)"):
+        uploaded_doc = st.file_uploader("Fichier à corriger", type=['docx', 'pdf', 'txt'], key="doc_upload")
+        if uploaded_doc and st.button("Envoyer fichier"):
+            content = extract_text_from_file(uploaded_doc)
+            user_msg = f"📄 Fichier **{uploaded_doc.name}** : {content}"
+            st.chat_message("user").write(f"📄 *Fichier envoyé : {uploaded_doc.name}*")
+            st.session_state.messages.append({"role": "user", "content": user_msg})
+            save_log(student_id, "Eleve", f"[FICHIER] {uploaded_doc.name}")
+            try:
+                # Mémoire limitée (10 derniers messages)
+                memoire_courte = st.session_state.messages[-10:]
+                msgs = [{"role": "system", "content": get_system_prompt(st.session_state.mode_simple)}] + [{"role": m["role"], "content": m["content"]} for m in memoire_courte]
+                
+                completion = client.chat.completions.create(messages=msgs, model="llama-3.1-8b-instant", temperature=0.7)
+                rep = completion.choices[0].message.content
+                st.chat_message("assistant").write(rep)
+                st.session_state.messages.append({"role": "assistant", "content": rep})
+                save_log(student_id, "Superviseur", rep)
+                st.rerun()
+            except Exception as e: st.error(f"Erreur : {e}")
+
+    # SAISIE
+    if prompt := st.chat_input("Votre réponse..."):
+        if not student_id: st.warning("⚠️ Prénom requis !")
+        else:
+            st.chat_message("user").write(prompt)
+            st.session_state.messages.append({"role": "user", "content": prompt})
+            save_log(student_id, "Eleve", prompt)
+            try:
+                # Mémoire limitée (10 derniers messages)
+                memoire_courte = st.session_state.messages[-10:]
+                msgs = [{"role": "system", "content": get_system_prompt(st.session_state.mode_simple)}] + [{"role": m["role"], "content": m["content"]} for m in memoire_courte]
+                
+                completion = client.chat.completions.create(messages=msgs, model="llama-3.1-8b-instant", temperature=0.7)
+                rep = completion.choices[0].message.content
+                st.chat_message("assistant").write(rep)
+                st.session_state.messages.append({"role": "assistant", "content": rep})
+                save_log(student_id, "Superviseur", rep)
+                st.rerun()
+            except Exception as e: st.error(f"Erreur : {e}")
