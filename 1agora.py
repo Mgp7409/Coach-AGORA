@@ -1,4 +1,3 @@
-				Python PROAGORA
 import streamlit as st
 import pandas as pd
 from groq import Groq
