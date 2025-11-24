@@ -22,7 +22,6 @@ st.set_page_config(
 )
 
 # --- 2. STYLE CSS & FOOTER FIXE ---
-# C'est ici que la magie opère pour le bandeau en bas
 st.markdown("""
 <style>
     /* Cache le footer standard Streamlit */
@@ -165,7 +164,7 @@ with st.sidebar:
     st.image("https://img.icons8.com/color/96/student-center.png", width=80)
     st.header("Profil Élève")
     
-    # Alerte Rouge Permanente (Style classe sidebar-alert défini plus haut)
+    # Alerte Rouge Permanente
     st.markdown("""
     <div class="sidebar-alert">
     🚫 INTERDIT : Ne jamais saisir de données personnelles réelles.
@@ -175,6 +174,8 @@ with st.sidebar:
     student_name = st.text_input("Ton Prénom (seulement) :", placeholder="Ex: Thomas")
     
     st.divider()
+    
+    # --- ZONE ANALYSE DOCUMENT ---
     st.subheader("📂 Analyse de Document")
     uploaded_file = st.file_uploader("Fichier .docx uniquement", type=['docx'])
     
@@ -188,7 +189,47 @@ with st.sidebar:
                 st.rerun()
 
     st.divider()
-    if st.button("🔄 Nouvelle Session"):
+
+    # --- ZONE SAUVEGARDE & REPRISE (NOUVEAU) ---
+    st.subheader("💾 Sauvegarde & Reprise")
+    
+    # 1. BOUTON SAUVEGARDE
+    if len(st.session_state.messages) > 1:
+        # On convertit l'historique en DataFrame puis en CSV
+        chat_df = pd.DataFrame(st.session_state.messages)
+        csv_data = chat_df.to_csv(index=False).encode('utf-8')
+        
+        filename = f"session_agora_{student_name if student_name else 'anonyme'}.csv"
+        
+        st.download_button(
+            label="📥 Télécharger ma session (.csv)",
+            data=csv_data,
+            file_name=filename,
+            mime="text/csv",
+            help="Clique pour enregistrer ton travail et le reprendre plus tard."
+        )
+    
+    # 2. BOUTON REPRISE
+    uploaded_session = st.file_uploader("Reprendre un travail (.csv)", type=['csv'])
+    if uploaded_session:
+        if st.button("🔄 Restaurer l'historique"):
+            try:
+                # Lecture du CSV
+                df_restored = pd.read_csv(uploaded_session)
+                # Vérification basique de la structure
+                if 'role' in df_restored.columns and 'content' in df_restored.columns:
+                    # Conversion en liste de dictionnaires pour la session_state
+                    st.session_state.messages = df_restored.to_dict('records')
+                    st.success("✅ Session restaurée avec succès !")
+                    st.rerun()
+                else:
+                    st.error("❌ Fichier CSV invalide (colonnes manquantes).")
+            except Exception as e:
+                st.error(f"❌ Erreur lors de la lecture : {e}")
+
+    st.divider()
+    
+    if st.button("🗑️ Nouvelle Session (Effacer tout)"):
         st.session_state.messages = [{"role": "assistant", "content": INITIAL_MESSAGE}]
         st.session_state.logs = []
         st.rerun()
