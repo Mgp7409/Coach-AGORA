@@ -6,7 +6,7 @@ from datetime import datetime
 from io import StringIO, BytesIO
 import re
 import os
-import base64 # Pour l'encodage des images dans le HTML
+import base64
 
 # --- 0. SÉCURITÉ & DÉPENDANCES ---
 try:
@@ -32,8 +32,9 @@ st.set_page_config(
 # --- 2. GESTION ÉTAT ---
 if "messages" not in st.session_state: st.session_state.messages = []
 if "logs" not in st.session_state: st.session_state.logs = []
+if "notifications" not in st.session_state: st.session_state.notifications = ["Bienvenue sur la plateforme."]
 
-# --- 3. OUTILS IMAGE (Pour le Header HTML) ---
+# --- 3. OUTILS IMAGE ---
 def img_to_base64(img_path):
     if os.path.exists(img_path):
         with open(img_path, "rb") as f:
@@ -55,66 +56,56 @@ st.markdown(f"""
         background-color: #FFFFFF;
     }}
 
-    /* SUPPRESSION DES MARGES PAR DÉFAUT DE STREAMLIT POUR LE HEADER */
+    /* SUPPRESSION MARGES HEADER */
     .reportview-container .main .block-container {{
         padding-top: 1rem;
         padding-right: 1rem;
         padding-left: 1rem;
         max-width: 100%;
     }}
-    header {{visibility: hidden;}} /* Cache le header Streamlit (les 3 points) */
+    header {{visibility: hidden;}} 
 
-    /* BARRE DE NAVIGATION (HEADER) PERSONNALISÉE */
-    .custom-header {{
+    /* STYLE NAVBAR (CONTAINER) */
+    .navbar-container {{
         display: flex;
         align-items: center;
-        justify-content: space-between;
-        background-color: #FFFFFF;
-        padding: 15px 20px;
+        background-color: white;
+        padding: 10px 20px;
         border-bottom: 1px solid #E0E0E0;
-        margin-bottom: 20px;
-        border-radius: 8px;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+        margin-bottom: 10px;
+        height: 80px;
     }}
-    
-    .header-left {{
-        display: flex;
-        align-items: center;
-        gap: 15px;
+
+    /* LOGO & TITRE */
+    .logo-img {{
+        height: 50px;
+        margin-right: 15px;
     }}
-    
-    .header-title {{
-        font-size: 22px;
+    .app-title {{
+        font-size: 24px;
         font-weight: 600;
         color: #202124;
         margin: 0;
+        line-height: 1.2;
     }}
-    
-    .header-subtitle {{
+    .app-subtitle {{
         font-size: 12px;
         color: #5F6368;
-        background-color: #F1F3F4;
-        padding: 4px 8px;
-        border-radius: 12px;
-        margin-left: 10px;
+        font-weight: 400;
     }}
 
-    .header-right {{
-        display: flex;
-        align-items: center;
-        gap: 20px;
+    /* BOUTONS NAVBAR (Invisible background) */
+    div[data-testid="stHorizontalBlock"] button {{
+        background-color: transparent;
+        border: none;
         color: #5F6368;
-        font-size: 14px;
+        box-shadow: none;
+        font-weight: 500;
     }}
-    
-    .header-icon {{
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        gap: 5px;
-        transition: color 0.2s;
+    div[data-testid="stHorizontalBlock"] button:hover {{
+        color: #1A73E8;
+        background-color: #F1F3F4;
     }}
-    .header-icon:hover {{ color: #1A73E8; }}
 
     /* SIDEBAR */
     [data-testid="stSidebar"] {{
@@ -122,20 +113,15 @@ st.markdown(f"""
         border-right: 1px solid #E0E0E0;
     }}
 
-    /* BOUTONS & INPUTS */
-    .stButton > button {{
+    /* BOUTONS ACTION (Verts/Bleus) */
+    div[data-testid="stSidebar"] button {{
         background-color: #FFFFFF;
         border: 1px solid #DADCE0;
         color: #3C4043;
         border-radius: 8px;
-        font-weight: 500;
-    }}
-    .stButton > button:hover {{
-        background-color: #F1F3F4;
-        border-color: #DADCE0;
-        color: #202124;
     }}
     
+    /* Bouton Primaire (Lancer) */
     button[kind="primary"] {{
         background: linear-gradient(135deg, #0F9D58 0%, #00C9FF 100%);
         color: white !important;
@@ -151,12 +137,6 @@ st.markdown(f"""
     }}
     [data-testid="stChatMessage"][data-testid="user"] {{
         background-color: #F1F3F4;
-    }}
-
-    /* AVATAR */
-    [data-testid="stChatMessageAvatar"] img {{
-        border-radius: 50%;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }}
 
     /* FOOTER & INPUT */
@@ -214,6 +194,10 @@ def clean_text_for_audio(text):
     text = re.sub(r'[\*_]{1,3}', '', text)
     text = re.sub(r'\[.*?\]', '', text)
     return text
+
+def add_notification(msg):
+    ts = datetime.now().strftime("%H:%M")
+    st.session_state.notifications.insert(0, f"{ts} - {msg}")
 
 def log_interaction(student, role, content):
     st.session_state.logs.append({
@@ -279,6 +263,7 @@ def lancer_mission():
     with st.spinner("Initialisation..."):
         resp, _ = query_groq_with_rotation(msgs)
         st.session_state.messages.append({"role": "assistant", "content": resp})
+    add_notification(f"Mission lancée : {st.session_state.dossier}")
 
 # --- 9. INTERFACE ---
 
@@ -287,17 +272,19 @@ LOGO_LYCEE = "logo_lycee.png"
 LOGO_AGORA = "logo_agora.png"
 BOT_AVATAR = LOGO_AGORA if os.path.exists(LOGO_AGORA) else "🤖"
 
-# --- SIDEBAR ---
+# --- SIDEBAR (Menu) ---
 with st.sidebar:
     if os.path.exists(LOGO_LYCEE):
-        st.image(LOGO_LYCEE, width=120)
+        st.image(LOGO_LYCEE, width=100)
     else:
         st.header("Lycée Pro")
     
     st.markdown("---")
     st.info("🔒 **Espace Sécurisé** : Données fictives uniquement.")
     
+    # Identification qui mettra à jour le bouton "Invité"
     student_name = st.text_input("Prénom", placeholder="Ex: Camille")
+    user_label = f"👤 {student_name}" if student_name else "👤 Invité"
     
     st.subheader("📂 Missions")
     st.session_state.theme = st.selectbox("Thème", list(DB_PREMIERE.keys()))
@@ -320,11 +307,11 @@ with st.sidebar:
         if st.button("Envoyer à la correction"):
             txt = extract_text_from_docx(uploaded_file)
             st.session_state.messages.append({"role": "user", "content": f"PROPOSITION : {txt}"})
+            add_notification(f"Fichier envoyé : {uploaded_file.name}")
             st.rerun()
     
     st.markdown("---")
     
-    # SAUVEGARDE
     if len(st.session_state.messages) > 1:
         chat_df = pd.DataFrame(st.session_state.messages)
         csv_data = chat_df.to_csv(index=False).encode('utf-8')
@@ -333,30 +320,55 @@ with st.sidebar:
 
     if st.button("🗑️ Reset"):
         st.session_state.messages = [{"role": "assistant", "content": INITIAL_MESSAGE}]
+        st.session_state.notifications = ["Session réinitialisée."]
         st.rerun()
 
-# --- HEADER PERSONNALISÉ (HTML/CSS) ---
-# On prépare le logo AGORA en base64 pour l'afficher dans le HTML
-logo_html = ""
-if os.path.exists(LOGO_AGORA):
-    b64_logo = img_to_base64(LOGO_AGORA)
-    logo_html = f'<img src="data:image/png;base64,{b64_logo}" style="height:40px; margin-right:10px;">'
+# --- HEADER FONCTIONNEL (Navbar) ---
+# On utilise des colonnes Streamlit pour placer les éléments
+c1, c2, c3, c4 = st.columns([4, 1, 1, 1])
 
-st.markdown(f"""
-<div class="custom-header">
-    <div class="header-left">
+with c1:
+    # Affichage Logo + Titre (Simulé en HTML/Markdown pour le look)
+    logo_html = ""
+    if os.path.exists(LOGO_AGORA):
+        b64 = img_to_base64(LOGO_AGORA)
+        logo_html = f'<img src="data:image/png;base64,{b64}" style="height:45px; vertical-align:middle; margin-right:10px;">'
+    
+    st.markdown(f"""
+    <div style="display:flex; align-items:center;">
         {logo_html}
         <div>
-            <div class="header-title">Agence Pro'AGOrA <span class="header-subtitle">Superviseur IA</span></div>
+            <div style="font-size:24px; font-weight:bold; color:#202124; line-height:1.2;">Agence Pro'AGOrA</div>
+            <div style="font-size:12px; color:#5F6368;">Superviseur IA v1.3</div>
         </div>
     </div>
-    <div class="header-right">
-        <div class="header-icon">❓ Aide</div>
-        <div class="header-icon">🔔 Notifications</div>
-        <div class="header-icon">👤 {student_name if student_name else "Invité"}</div>
-    </div>
-</div>
-""", unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
+
+# Bouton AIDE (Ouvre une fenêtre avec les compétences)
+with c2:
+    with st.popover("❓ Aide", use_container_width=True):
+        st.markdown("### 📘 Référentiel de Compétences")
+        st.info("Voici les compétences évaluées dans cette mission :")
+        comp_text = DB_PREMIERE[st.session_state.theme][st.session_state.dossier]
+        st.write(comp_text)
+        st.markdown("---")
+        st.caption("Besoin d'aide technique ? Demandez à votre professeur.")
+
+# Bouton NOTIFICATIONS (Ouvre l'historique des actions)
+with c3:
+    with st.popover("🔔 Notif.", use_container_width=True):
+        st.markdown("### 📜 Historique")
+        if not st.session_state.notifications:
+            st.caption("Aucune notification.")
+        else:
+            for note in st.session_state.notifications[:10]: # Affiche les 10 dernières
+                st.text(f"• {note}")
+
+# Bouton PROFIL (Affiche le nom)
+with c4:
+    st.button(user_label, disabled=True, use_container_width=True) # Bouton désactivé juste pour l'affichage visuel
+
+st.markdown("<hr style='margin: 0 0 20px 0;'>", unsafe_allow_html=True)
 
 # --- CHAT CENTRAL ---
 for i, msg in enumerate(st.session_state.messages):
@@ -378,7 +390,7 @@ for i, msg in enumerate(st.session_state.messages):
 st.markdown("<br><br>", unsafe_allow_html=True)
 
 # --- FOOTER ---
-st.markdown('<div class="fixed-footer">Agence Pro\'AGOrA v1.2 - Environnement Pédagogique Sécurisé - Données Fictives Uniquement</div>', unsafe_allow_html=True)
+st.markdown('<div class="fixed-footer">Agence Pro\'AGOrA - Environnement Pédagogique Sécurisé - Données Fictives Uniquement</div>', unsafe_allow_html=True)
 
 # --- INPUT & LOGIC ---
 if user_input := st.chat_input("Votre réponse..."):
@@ -399,4 +411,3 @@ if st.session_state.messages[-1]["role"] == "user":
             st.markdown(resp)
             st.session_state.messages.append({"role": "assistant", "content": resp})
             if st.session_state.get("mode_audio"): st.rerun()
-            
