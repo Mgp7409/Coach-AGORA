@@ -15,7 +15,7 @@ except ImportError:
 
 # --- 1. CONFIGURATION DE LA PAGE ---
 st.set_page_config(
-    page_title="Superviseur Pro'AGOrA", 
+    page_title="Restitution Pro'AGOrA", 
     page_icon="🎓",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -157,7 +157,7 @@ if not st.session_state.messages:
 
 # --- 6. INTERFACE GRAPHIQUE ---
 
-st.title("🎓 Supervision Agence Pro'AGOrA")
+st.title("🎓 Restitution PFMP Pro'AGOrA")
 
 # A. BARRE LATÉRALE
 with st.sidebar:
