@@ -22,9 +22,12 @@ except ImportError:
     HAS_AUDIO = False
 
 # --- 1. CONFIGURATION DE LA PAGE ---
+# On utilise le logo Agence comme icône de page si disponible
+PAGE_ICON = "logo_agora.png" if os.path.exists("logo_agora.png") else "🏢"
+
 st.set_page_config(
     page_title="Agence Pro'AGOrA", 
-    page_icon="🏢", 
+    page_icon=PAGE_ICON, 
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -76,25 +79,7 @@ st.markdown(f"""
         height: 80px;
     }}
 
-    /* LOGO & TITRE */
-    .logo-img {{
-        height: 50px;
-        margin-right: 15px;
-    }}
-    .app-title {{
-        font-size: 24px;
-        font-weight: 600;
-        color: #202124;
-        margin: 0;
-        line-height: 1.2;
-    }}
-    .app-subtitle {{
-        font-size: 12px;
-        color: #5F6368;
-        font-weight: 400;
-    }}
-
-    /* BOUTONS NAVBAR (Invisible background) */
+    /* BOUTONS NAVBAR */
     div[data-testid="stHorizontalBlock"] button {{
         background-color: transparent;
         border: none;
@@ -137,6 +122,13 @@ st.markdown(f"""
     }}
     [data-testid="stChatMessage"][data-testid="user"] {{
         background-color: #F1F3F4;
+    }}
+
+    /* AVATAR */
+    [data-testid="stChatMessageAvatar"] img {{
+        border-radius: 50%;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        object-fit: cover;
     }}
 
     /* FOOTER & INPUT */
@@ -282,7 +274,6 @@ with st.sidebar:
     st.markdown("---")
     st.info("🔒 **Espace Sécurisé** : Données fictives uniquement.")
     
-    # Identification qui mettra à jour le bouton "Invité"
     student_name = st.text_input("Prénom", placeholder="Ex: Camille")
     user_label = f"👤 {student_name}" if student_name else "👤 Invité"
     
@@ -324,11 +315,9 @@ with st.sidebar:
         st.rerun()
 
 # --- HEADER FONCTIONNEL (Navbar) ---
-# On utilise des colonnes Streamlit pour placer les éléments
 c1, c2, c3, c4 = st.columns([4, 1, 1, 1])
 
 with c1:
-    # Affichage Logo + Titre (Simulé en HTML/Markdown pour le look)
     logo_html = ""
     if os.path.exists(LOGO_AGORA):
         b64 = img_to_base64(LOGO_AGORA)
@@ -344,29 +333,29 @@ with c1:
     </div>
     """, unsafe_allow_html=True)
 
-# Bouton AIDE (Ouvre une fenêtre avec les compétences)
+# BOUTON AIDE (LIEN WEB)
 with c2:
     with st.popover("❓ Aide", use_container_width=True):
-        st.markdown("### 📘 Référentiel de Compétences")
-        st.info("Voici les compétences évaluées dans cette mission :")
-        comp_text = DB_PREMIERE[st.session_state.theme][st.session_state.dossier]
-        st.write(comp_text)
+        st.markdown("### 📚 Centre de Ressources")
+        st.info("Besoin d'un mémo ou d'un cours ?")
+        # REMPLACEZ L'URL CI-DESSOUS par votre Drive / Moodle / Site
+        st.link_button("📂 Accéder aux Cours", "https://www.votre-site-pedagogique.fr")
         st.markdown("---")
-        st.caption("Besoin d'aide technique ? Demandez à votre professeur.")
+        st.caption("En cas de problème technique, contactez votre professeur.")
 
-# Bouton NOTIFICATIONS (Ouvre l'historique des actions)
+# BOUTON NOTIFICATIONS
 with c3:
     with st.popover("🔔 Notif.", use_container_width=True):
         st.markdown("### 📜 Historique")
         if not st.session_state.notifications:
             st.caption("Aucune notification.")
         else:
-            for note in st.session_state.notifications[:10]: # Affiche les 10 dernières
+            for note in st.session_state.notifications[:10]:
                 st.text(f"• {note}")
 
-# Bouton PROFIL (Affiche le nom)
+# BOUTON PROFIL
 with c4:
-    st.button(user_label, disabled=True, use_container_width=True) # Bouton désactivé juste pour l'affichage visuel
+    st.button(user_label, disabled=True, use_container_width=True)
 
 st.markdown("<hr style='margin: 0 0 20px 0;'>", unsafe_allow_html=True)
 
