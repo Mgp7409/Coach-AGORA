@@ -29,13 +29,15 @@ st.set_page_config(
 )
 
 # --- 2. GESTION ÉTAT (Session State) ---
-if "mode_dys" not in st.session_state: st.session_state.mode_dys = False
-if "mode_simple" not in st.session_state: st.session_state.mode_simple = False
-if "mode_audio" not in st.session_state: st.session_state.mode_audio = False
+# Initialisation des variables de session si elles n'existent pas
 if "messages" not in st.session_state: st.session_state.messages = []
 if "logs" not in st.session_state: st.session_state.logs = []
+# Note: mode_dys, mode_audio, mode_simple sont gérés directement par les keys des widgets
 
 # --- 3. STYLE CSS (ACCESSIBILITÉ & FOOTER) ---
+# On récupère l'état via la clé du widget (avec une valeur par défaut False si pas encore créée)
+is_dys = st.session_state.get("mode_dys", False)
+
 dys_css = """
     html, body, [class*="css"] {
         font-family: 'Verdana', sans-serif !important;
@@ -43,7 +45,7 @@ dys_css = """
         line-height: 1.8 !important;
         letter-spacing: 0.5px !important;
     }
-""" if st.session_state.mode_dys else ""
+""" if is_dys else ""
 
 st.markdown(f"""
 <style>
@@ -227,7 +229,7 @@ def lancer_mission():
     
     # Construction du prompt avec option SIMPLIFIÉE
     final_system_prompt = SYSTEM_PROMPT
-    if st.session_state.mode_simple:
+    if st.session_state.get("mode_simple", False):
         final_system_prompt += "\n\n⚠️ MODE SIMPLIFIÉ : Utilise des mots simples. Fais une liste à puces pour les étapes. Sois très clair."
 
     msgs = [{"role": "system", "content": final_system_prompt}]
@@ -256,21 +258,17 @@ with st.sidebar:
     
     st.divider()
 
-    # --- ZONE ACCESSIBILITÉ ---
+    # --- ZONE ACCESSIBILITÉ (CORRIGÉE) ---
     st.subheader("♿ Accessibilité")
     col_a, col_b = st.columns(2)
     with col_a:
-        if st.checkbox("👁️ DYS", value=st.session_state.mode_dys):
-            st.session_state.mode_dys = True
-            st.rerun()
-        else:
-            if st.session_state.mode_dys:
-                st.session_state.mode_dys = False
-                st.rerun()
+        # Simplification : On utilise "key" pour lier directement à session_state
+        # Cela évite le bug "removeChild" car Streamlit gère le cycle de vie
+        st.checkbox("👁️ DYS", key="mode_dys")
     with col_b:
-        st.session_state.mode_audio = st.checkbox("🔊 Audio")
+        st.checkbox("🔊 Audio", key="mode_audio")
     
-    st.session_state.mode_simple = st.checkbox("🧠 Consignes Simplifiées")
+    st.checkbox("🧠 Consignes Simplifiées", key="mode_simple")
     
     st.divider()
     
@@ -338,7 +336,7 @@ with chat_container:
                 st.markdown(msg["content"])
                 
                 # --- LECTEUR AUDIO (Accessibilité) ---
-                if st.session_state.mode_audio and msg["role"] == "assistant" and HAS_AUDIO:
+                if st.session_state.get("mode_audio", False) and msg["role"] == "assistant" and HAS_AUDIO:
                     # On génère un ID unique pour le cache audio
                     audio_key = f"audio_{i}"
                     if audio_key not in st.session_state:
@@ -371,7 +369,7 @@ if st.session_state.messages[-1]["role"] == "user":
             
             # Injection dynamique du mode simplifié
             final_system_prompt = SYSTEM_PROMPT
-            if st.session_state.mode_simple:
+            if st.session_state.get("mode_simple", False):
                 final_system_prompt += "\n\n⚠️ MODE SIMPLIFIÉ : Utilise des mots simples. Fais une liste à puces pour les étapes."
 
             messages_payload = [{"role": "system", "content": final_system_prompt}]
@@ -385,8 +383,9 @@ if st.session_state.messages[-1]["role"] == "user":
             st.markdown(response_content)
             
     st.session_state.messages.append({"role": "assistant", "content": response_content})
-    # Astuce pour générer l'audio au prochain rafraîchissement si le mode est actif
-    if st.session_state.mode_audio:
+    
+    # Relance automatique uniquement si l'audio est activé pour afficher le lecteur
+    if st.session_state.get("mode_audio", False):
         st.rerun()
 
 # E. SAISIE UTILISATEUR (CHAT)
