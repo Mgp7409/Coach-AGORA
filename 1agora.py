@@ -91,6 +91,7 @@ st.markdown(f"""
     /* AVATAR ROND */
     [data-testid="stChatMessageAvatar"] img {{
         border-radius: 50%;
+        object-fit: cover;
     }}
 
     /* BANDEAU LÉGAL */
@@ -133,7 +134,7 @@ def query_groq_with_rotation(messages):
     if not available_keys: return None, "ERREUR CONFIG"
     keys = list(available_keys)
     random.shuffle(keys)
-    models = ["llama-3.3-70b-versatile", "mixtral-8x7b-32768"] # Modèles performants
+    models = ["llama-3.3-70b-versatile", "mixtral-8x7b-32768"]
     
     for key in keys:
         try:
@@ -228,18 +229,22 @@ def lancer_mission():
 
 # --- 8. INTERFACE ---
 
-# --- GESTION LOGO ---
-LOGO_PATH = "logo_agora.png"
-# Avatar du Bot : Utilise le logo si présent, sinon un robot
-BOT_AVATAR = LOGO_PATH if os.path.exists(LOGO_PATH) else "🤖"
+# --- CONFIG IMAGES ---
+# 1. Logo Lycée (Sidebar)
+LOGO_LYCEE = "logo_lycee.png" 
+# 2. Logo Agence (Avatar Bot)
+LOGO_AGORA = "logo_agora.png"
+
+# Avatar du Bot : Utilise le logo AGORA si présent, sinon Robot
+BOT_AVATAR = LOGO_AGORA if os.path.exists(LOGO_AGORA) else "🤖"
 
 # --- SIDEBAR ---
 with st.sidebar:
-    # Affichage Logo Principal
-    if os.path.exists(LOGO_PATH):
-        st.image(LOGO_PATH, use_column_width=True)
+    # AFFICHE LE LOGO DU LYCEE EN HAUT A GAUCHE
+    if os.path.exists(LOGO_LYCEE):
+        st.image(LOGO_LYCEE, width=100)
     else:
-        st.header("Agence Pro'AGOrA")
+        st.header("Lycée Pro") # Fallback si pas d'image
     
     st.markdown("---")
     
@@ -276,7 +281,26 @@ with st.sidebar:
         txt = extract_text_from_docx(uploaded_file)
         st.session_state.messages.append({"role": "user", "content": f"PROPOSITION : {txt}"})
         st.rerun()
+    
+    st.markdown("---")
+    
+    # --- BOUTON SAUVEGARDE (Ajouté) ---
+    if len(st.session_state.messages) > 1:
+        # Conversion de l'historique en CSV
+        chat_df = pd.DataFrame(st.session_state.messages)
+        csv_data = chat_df.to_csv(index=False).encode('utf-8')
         
+        date_str = datetime.now().strftime("%d%m_%H%M")
+        file_name = f"suivi_agora_{student_name}_{date_str}.csv"
+        
+        st.download_button(
+            label="💾 Sauvegarder la conversation",
+            data=csv_data,
+            file_name=file_name,
+            mime="text/csv",
+            help="Télécharge un fichier pour garder une trace de ton travail."
+        )
+
     if st.button("🗑️ Reset"):
         st.session_state.messages = [{"role": "assistant", "content": INITIAL_MESSAGE}]
         st.rerun()
@@ -285,7 +309,7 @@ with st.sidebar:
 st.title("Agence Pro'AGOrA")
 
 for i, msg in enumerate(st.session_state.messages):
-    # Choix de l'avatar : Logo pour l'assistant, Étudiant pour l'user
+    # Choix de l'avatar : Logo AGORA pour l'assistant, Étudiant pour l'user
     avatar = BOT_AVATAR if msg["role"] == "assistant" else "🧑‍🎓"
     
     with st.chat_message(msg["role"], avatar=avatar):
@@ -316,6 +340,7 @@ if user_input := st.chat_input("Votre réponse..."):
 
 # Réponse IA
 if st.session_state.messages[-1]["role"] == "user":
+    # Avatar AGORA ici aussi pour le spinner de chargement
     with st.chat_message("assistant", avatar=BOT_AVATAR):
         with st.spinner("Analyse..."):
             sys = SYSTEM_PROMPT
