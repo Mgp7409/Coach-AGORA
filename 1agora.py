@@ -5,6 +5,7 @@ from groq import Groq
 from datetime import datetime
 from io import StringIO, BytesIO
 import re
+import os
 
 # --- 0. SÉCURITÉ & DÉPENDANCES ---
 try:
@@ -13,7 +14,6 @@ except ImportError:
     st.error("⚠️ ERREUR CRITIQUE : Le module 'python-docx' manque. Ajoutez-le au fichier requirements.txt")
     st.stop()
 
-# Import gTTS pour l'audio (si manque, on gère l'erreur sans planter)
 try:
     from gtts import gTTS
     HAS_AUDIO = True
@@ -22,84 +22,154 @@ except ImportError:
 
 # --- 1. CONFIGURATION DE LA PAGE ---
 st.set_page_config(
-    page_title="Agence PRO'AGORA", 
-    page_icon="🏢",
+    page_title="Agence Pro'AGOrA", 
+    page_icon="🔵", # Icone plus sobre
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# --- 2. GESTION ÉTAT (Session State) ---
+# --- 2. GESTION ÉTAT ---
 if "messages" not in st.session_state: st.session_state.messages = []
 if "logs" not in st.session_state: st.session_state.logs = []
-# Note: mode_dys, mode_audio, mode_simple sont gérés par les widgets
 
-# --- 3. STYLE CSS & CHARTE GRAPHIQUE ---
+# --- 3. STYLE "GOOGLE MATERIAL DESIGN" ---
 # On récupère l'état DYS
 is_dys = st.session_state.get("mode_dys", False)
 
-dys_css = """
-    html, body, [class*="css"] {
-        font-family: 'Verdana', sans-serif !important;
-        font-size: 18px !important;
-        line-height: 1.8 !important;
-        letter-spacing: 0.5px !important;
-    }
-""" if is_dys else ""
+# Police de base : Roboto/Sans-serif comme Google
+font_family = "'Verdana', sans-serif" if is_dys else "'Google Sans', 'Roboto', Helvetica, Arial, sans-serif"
+font_size = "18px" if is_dys else "15px"
+line_height = "1.8" if is_dys else "1.5"
 
 st.markdown(f"""
 <style>
-    {dys_css}
+    /* IMPORT POLICE GOOGLE (Simulation) */
+    @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
+
+    /* GLOBAL */
+    html, body, [class*="css"] {{
+        font-family: {font_family} !important;
+        font-size: {font_size};
+        line-height: {line_height};
+        color: #202124;
+    }}
+
+    /* FOND PRINCIPAL BLANC */
+    .stApp {{
+        background-color: #FFFFFF;
+    }}
+
+    /* SIDEBAR (GRIS CLAIR TYPE GMAIL) */
+    [data-testid="stSidebar"] {{
+        background-color: #F6F8FC;
+        border-right: none;
+    }}
+
+    /* BOUTONS (STYLE MATERIAL DESIGN) */
+    .stButton > button {{
+        background-color: #F1F3F4; /* Gris bouton inactif */
+        color: #3c4043;
+        border: none;
+        border-radius: 24px; /* Très arrondi */
+        padding: 10px 24px;
+        font-weight: 500;
+        transition: all 0.2s;
+        box-shadow: none;
+    }}
     
-    /* Masquer le footer Streamlit */
-    footer {{visibility: hidden;}}
-    .reportview-container .main .block-container {{padding-top: 2rem;}}
+    .stButton > button:hover {{
+        background-color: #E8EAED;
+        box-shadow: 0 1px 2px rgba(60,64,67,0.3);
+        color: #202124;
+    }}
+
+    /* BOUTON PRIMAIRE (BLEU GOOGLE) - Ciblage du bouton "Lancer" */
+    /* Astuce: On cible le bouton spécifique via le type primary en Streamlit */
+    button[kind="primary"] {{
+        background-color: #1A73E8 !important;
+        color: white !important;
+        box-shadow: 0 1px 3px rgba(60,64,67,0.3);
+    }}
+    button[kind="primary"]:hover {{
+        background-color: #1765CC !important;
+        box-shadow: 0 4px 8px rgba(60,64,67,0.3);
+    }}
+
+    /* CHAMPS DE SAISIE (INPUTS) */
+    .stTextInput input, .stSelectbox > div > div {{
+        background-color: #F1F3F4;
+        border: 1px solid transparent;
+        border-radius: 8px;
+        color: #202124;
+    }}
+    .stTextInput input:focus, .stSelectbox > div > div:focus-within {{
+        background-color: white;
+        border: 1px solid #1A73E8;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    }}
+
+    /* ZONE DE CHAT ET BULLES */
+    [data-testid="stChatMessage"] {{
+        background-color: transparent;
+        border: none;
+        padding: 1rem 0;
+    }}
     
-    /* BANDEAU LÉGAL FIXE EN BAS */
+    /* Avatar rond */
+    [data-testid="stChatMessageAvatar"] {{
+        background-color: #1A73E8;
+        color: white;
+        border-radius: 50%;
+    }}
+
+    /* BANDEAU LÉGAL FLOTTANT (Style "Toaster" Google) */
     .fixed-footer {{
         position: fixed;
-        left: 0;
-        bottom: 0;
-        width: 100%;
-        background-color: #f8f9fa;
-        color: #6c757d;
+        left: 50%;
+        transform: translateX(-50%);
+        bottom: 10px;
+        background-color: #323232;
+        color: white;
         text-align: center;
-        padding: 8px 10px;
-        font-size: 11px;
-        border-top: 1px solid #e1e4e8;
-        z-index: 99999;
-        line-height: 1.4;
-        font-family: sans-serif;
-    }}
-
-    /* Remonter la zone de saisie pour ne pas être cachée */
-    [data-testid="stBottom"] {{
-        bottom: 50px !important;
-        padding-bottom: 0px !important;
-    }}
-    
-    /* STYLE ALERTE ROUGE (Sidebar) */
-    .sidebar-alert {{
-        padding: 12px;
-        background-color: #fff5f5;
-        border-left: 5px solid #c53030;
-        color: #c53030;
+        padding: 10px 20px;
+        font-size: 12px;
         border-radius: 4px;
-        font-weight: 600;
-        font-size: 0.85rem;
-        margin-bottom: 1rem;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        z-index: 99999;
+        box-shadow: 0 3px 5px -1px rgba(0,0,0,.2), 0 6px 10px 0 rgba(0,0,0,.14), 0 1px 18px 0 rgba(0,0,0,.12);
+        min-width: 300px;
     }}
 
-    /* BOUTONS STYLISÉS */
-    .stButton > button {{
-        width: 100%;
-        border-radius: 6px;
-        font-weight: bold;
+    /* CACHER LE FOOTER STREAMLIT */
+    footer {{visibility: hidden;}}
+    
+    /* REMONTER LA ZONE DE SAISIE */
+    [data-testid="stBottom"] {{
+        bottom: 60px !important;
+    }}
+
+    /* TITRE PRINCIPAL */
+    h1 {{
+        color: #202124;
+        font-family: 'Google Sans', sans-serif;
+        font-weight: 400;
+    }}
+
+    /* ALERTE ROUGE SIDEBAR */
+    .sidebar-alert {{
+        background-color: #FCE8E6;
+        color: #C5221F;
+        padding: 12px;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        gap: 8px;
     }}
 </style>
 """, unsafe_allow_html=True)
 
-# --- 4. GESTION DES CLÉS API (ROTATION) ---
+# --- 4. GESTION API ---
 def get_api_keys_list():
     if "groq_keys" in st.secrets:
         return st.secrets["groq_keys"]
@@ -110,59 +180,48 @@ def get_api_keys_list():
 def query_groq_with_rotation(messages):
     available_keys = get_api_keys_list()
     if not available_keys:
-        return None, "ERREUR CONFIG : Aucune clé API trouvée."
-    
+        return None, "ERREUR CONFIG"
     keys_to_try = list(available_keys)
     random.shuffle(keys_to_try)
     models = ["llama-3.3-70b-versatile", "mixtral-8x7b-32768", "llama-3.1-8b-instant"]
-
     for key in keys_to_try:
         try:
             client = Groq(api_key=key)
             for model in models:
                 try:
                     chat = client.chat.completions.create(
-                        messages=messages,
-                        model=model,
-                        temperature=0.5,
-                        max_tokens=1024, 
+                        messages=messages, model=model, temperature=0.5, max_tokens=1024
                     )
                     return chat.choices[0].message.content, model
                 except: continue 
         except: continue
     return None, "SATURATION SERVICE."
 
-# --- 5. FONCTIONS UTILITAIRES ---
+# --- 5. OUTILS FICHIERS ---
 def extract_text_from_docx(file):
     try:
         doc = Document(file)
         full_text = []
         for para in doc.paragraphs:
-            if para.text.strip():
-                full_text.append(para.text)
+            if para.text.strip(): full_text.append(para.text)
         text = "\n".join(full_text)
-        if len(text) > 8000:
-            text = text[:8000] + "\n\n[...TEXTE TRONQUÉ CAR TROP LONG...]"
+        if len(text) > 8000: text = text[:8000] + "\n\n[...TEXTE TRONQUÉ...]"
         return text
-    except Exception as e:
-        return f"Erreur de lecture : {str(e)}"
+    except Exception as e: return f"Erreur : {str(e)}"
 
 def clean_text_for_audio(text):
-    text = re.sub(r'[\*_]{1,3}', '', text) # Enlève gras/italique
-    text = re.sub(r'#+', '', text) # Enlève titres
-    text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', text) # Enlève liens
-    text = re.sub(r'^\s*-\s+', '', text, flags=re.MULTILINE) # Enlève puces
+    text = re.sub(r'[\*_]{1,3}', '', text)
+    text = re.sub(r'#+', '', text)
+    text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', text)
     return text
 
 def log_interaction(student, role, content):
     st.session_state.logs.append({
         "Heure": datetime.now().strftime("%H:%M:%S"),
-        "Utilisateur": student,
-        "Role": role,
-        "Message": content[:50]
+        "Utilisateur": student, "Role": role, "Message": content[:50]
     })
 
-# --- 6. DONNÉES PÉDAGOGIQUES ---
+# --- 6. DONNÉES MÉTIER ---
 DB_PREMIERE = {
     "GESTION DES ESPACES DE TRAVAIL": {
         "Aménagement des espaces": "COMPÉTENCE : Proposer un aménagement de bureau ergonomique et choisir le mobilier adapté.",
@@ -186,215 +245,195 @@ DB_PREMIERE = {
     }
 }
 
-# --- 7. PROMPT SYSTÈME ---
+# --- 7. PROMPTS ---
 SYSTEM_PROMPT = """
 RÔLE : Tu es le Superviseur Virtuel de l'Agence Pro'AGOrA.
 TON : Professionnel, encourageant mais exigeant (Vouvoiement).
 CIBLE : Élèves de Première Bac Pro AGOrA.
-MISSION : Guider l'élève pour qu'il analyse sa propre pratique ou réalise la mission sélectionnée.
+MISSION : Guider l'élève pour qu'il analyse sa propre pratique.
 
-⛔ INTERDICTIONS ABSOLUES :
-1. NE JAMAIS FAIRE LE TRAVAIL à la place de l'élève (ne rédige pas les mails, ne fais pas les calculs).
-2. NE PAS ÉCRIRE DE LONGS PARAGRAPHES. Tes réponses doivent être COURTES (max 3 phrases).
-3. Une seule question à la fois.
+⛔ INTERDICTIONS :
+1. NE JAMAIS FAIRE LE TRAVAIL à la place de l'élève.
+2. RÉPONSES COURTES (max 3 phrases).
+3. UNE SEULE question à la fois.
 
 DÉROULEMENT :
-1. Si l'élève lance une MISSION : Incarne le responsable, donne le contexte (Entreprise fictive, chiffres clés) et la consigne de départ.
-2. Si l'élève envoie un DOCUMENT (Word) : Analyse-le. Vérifie l'orthographe, la forme et le fond. Dis ce qui va, et pose UNE question sur ce qui manque.
-3. Si l'élève DISCUTE : Guide-le par maïeutique (questions ouvertes).
+1. MISSION LANCÉE : Incarne le responsable, donne le contexte et la consigne.
+2. DOCUMENT REÇU : Analyse la forme et le fond. Dis ce qui va, pose une question sur ce qui manque.
+3. DISCUSSION : Guide par maïeutique.
 
-SÉCURITÉ : Si l'élève utilise un VRAI nom de famille ou une vraie entreprise, demande-lui d'anonymiser immédiatement.
+SÉCURITÉ : Si données réelles détectées -> STOP et demande anonymisation.
 """
 
 INITIAL_MESSAGE = """
-👋 **Bonjour Opérateur/Opératrice.**
+**Bonjour.** 👋
 
-Bienvenue à l'Agence Pro'AGOrA.
+Bienvenue dans l'espace de supervision **Agence Pro'AGOrA**.
 
-**⚠️ SÉCURITÉ :** Utilise uniquement des données **FICTIVES**.
-
-👉 **Pour commencer :** Sélectionne ta mission dans le menu de gauche et clique sur **LANCER**.
+Veuillez sélectionner votre mission dans le menu latéral pour commencer.
 """
 
 if not st.session_state.messages:
     st.session_state.messages.append({"role": "assistant", "content": INITIAL_MESSAGE})
 
-# Fonction de lancement
 def lancer_mission():
     theme = st.session_state.theme_select
     dossier = st.session_state.dossier_select
     competence = DB_PREMIERE[theme][dossier]
-    
     st.session_state.messages = []
     
     prompt_demarrage = f"""
     CONTEXTE : L'élève démarre la mission '{dossier}'.
-    COMPÉTENCE VISÉE : {competence}
-    ACTION : Invente une entreprise fictive (PME ou Asso) et un contexte réaliste.
-    CONSIGNE : Accueille l'élève en tant que son responsable, donne-lui les données de départ (budget, dates, contraintes) et la première tâche à réaliser.
-    Ne fais PAS la tâche toi-même.
+    COMPÉTENCE : {competence}
+    ACTION : Invente une entreprise fictive (PME/Asso) et un contexte réaliste.
+    CONSIGNE : Accueille l'élève (rôle Responsable), donne les données de départ (budget, dates) et la 1ère tâche.
     """
     
-    final_system_prompt = SYSTEM_PROMPT
+    final_system = SYSTEM_PROMPT
     if st.session_state.get("mode_simple", False):
-        final_system_prompt += "\n\n⚠️ MODE SIMPLIFIÉ : Utilise des mots simples. Fais une liste à puces."
+        final_system += "\n\n⚠️ MODE SIMPLIFIÉ : Mots simples, listes à puces."
 
-    msgs = [{"role": "system", "content": final_system_prompt}]
-    msgs.append({"role": "user", "content": prompt_demarrage})
+    msgs = [{"role": "system", "content": final_system}, {"role": "user", "content": prompt_demarrage}]
     
-    with st.spinner("Chargement du scénario..."):
+    with st.spinner("Chargement du dossier..."):
         intro_bot, _ = query_groq_with_rotation(msgs)
         st.session_state.messages.append({"role": "assistant", "content": intro_bot})
 
-# --- 8. INTERFACE GRAPHIQUE ---
+# --- 8. INTERFACE ---
 
-# En-tête principal (Modifié selon demande)
-st.title("🎓 Agence Pro'AGORA")
-st.caption("Plateforme pédagogique d'entraînement aux situations professionnelles.")
+# Header simple et propre
+st.title("Agence Pro'AGOrA")
+st.caption("Environnement Numérique de Formation")
 
-# A. BARRE LATÉRALE
+# --- SIDEBAR (Menu Latéral) ---
 with st.sidebar:
-    # LOGO DU LYCÉE
-    # Assurez-vous que le fichier "logo_lycee.png" est bien à la racine de votre GitHub
-    # Sinon, remettez l'URL : "https://img.icons8.com/clouds/200/school.png"
-    st.image("logo_lycee.png", width=120)
+    # Logo
+    LOGO_FILE = "logo_lycee.png"
+    if os.path.exists(LOGO_FILE):
+        st.image(LOGO_FILE, width=80)
+    else:
+        st.image("https://img.icons8.com/color/96/google-classroom.png", width=60)
     
-    st.header("👤 Espace Élève")
+    st.markdown("### 👤 Identification")
     
-    # ALERTE ROUGE
+    # Alerte stylisée
     st.markdown("""
     <div class="sidebar-alert">
-    🚫 <b>INTERDIT</b><br>
-    Ne jamais saisir de données personnelles réelles (RGPD).
+    🛡️ <b>Sécurité RGPD</b><br>
+    Aucune donnée réelle ne doit être saisie. Utilisez des pseudonymes.
     </div>
     """, unsafe_allow_html=True)
     
-    student_name = st.text_input("Ton Prénom :", placeholder="Ex: Thomas")
+    student_name = st.text_input("Prénom", placeholder="Votre prénom")
     
     st.divider()
 
-    # ACCESSIBILITÉ (Correction Bug removeChild appliquée)
-    st.subheader("♿ Accessibilité")
+    # Options (Switches plus propres)
+    st.markdown("### ⚙️ Paramètres")
     col_a, col_b = st.columns(2)
     with col_a:
-        st.checkbox("👁️ DYS", key="mode_dys", help="Police adaptée pour la dyslexie")
+        st.checkbox("DYS", key="mode_dys")
     with col_b:
-        st.checkbox("🔊 Audio", key="mode_audio", help="Lecture à voix haute des réponses")
-    
-    st.checkbox("🧠 Consignes Simplifiées", key="mode_simple", help="Langage plus simple et structuré")
+        st.checkbox("Audio", key="mode_audio")
+    st.checkbox("Simplifié", key="mode_simple")
     
     st.divider()
     
-    # CHOIX MISSION
-    st.subheader("📚 Choix de la Mission")
-    theme = st.selectbox("Thème :", list(DB_PREMIERE.keys()), key="theme_select")
-    dossier = st.selectbox("Dossier :", list(DB_PREMIERE[theme].keys()), key="dossier_select")
+    # Navigation Missions
+    st.markdown("### 📂 Missions")
+    theme = st.selectbox("Thème", list(DB_PREMIERE.keys()), key="theme_select")
+    dossier = st.selectbox("Dossier", list(DB_PREMIERE[theme].keys()), key="dossier_select")
     
-    if st.button("🚀 LANCER LE SCÉNARIO", type="primary"):
+    # Bouton d'action principal (Bleu)
+    if st.button("Lancer la mission", type="primary"):
         if student_name:
             lancer_mission()
             st.rerun()
         else:
-            st.toast("⚠️ Indique ton prénom avant de lancer !", icon="🛑")
+            st.toast("Veuillez vous identifier d'abord.", icon="👤")
             
     st.divider()
     
-    # DÉPÔT FICHIER
-    st.subheader("📂 Rendre un travail")
-    uploaded_file = st.file_uploader("Fichier Word (.docx)", type=['docx'], label_visibility="collapsed")
+    # Upload
+    st.markdown("### 📤 Rendu")
+    uploaded_file = st.file_uploader("Déposer un fichier Word", type=['docx'], label_visibility="collapsed")
     
     if uploaded_file and student_name:
-        if st.button("📤 Envoyer à la correction"):
-            with st.spinner("Analyse du document..."):
+        if st.button("Envoyer à la correction"):
+            with st.spinner("Analyse en cours..."):
                 text_content = extract_text_from_docx(uploaded_file)
-                prompt_analysis = f"Voici ma production (Fichier Word : {uploaded_file.name}) :\n\n{text_content}"
-                st.session_state.messages.append({"role": "user", "content": prompt_analysis})
+                prompt = f"Voici mon fichier {uploaded_file.name} :\n\n{text_content}"
+                st.session_state.messages.append({"role": "user", "content": prompt})
                 log_interaction(student_name, "Eleve", f"Upload: {uploaded_file.name}")
                 st.rerun()
 
-    st.divider()
-
-    # SAUVEGARDE
-    if len(st.session_state.messages) > 1:
-        chat_df = pd.DataFrame(st.session_state.messages)
-        csv_data = chat_df.to_csv(index=False).encode('utf-8')
-        filename = f"agora_{student_name if student_name else 'anonyme'}.csv"
-        st.download_button("💾 Sauvegarder ma session", csv_data, filename, "text/csv")
-    
-    # BOUTON RESET
-    if st.button("🗑️ Nouvelle Session"):
+    # Footer sidebar
+    st.markdown("---")
+    if st.button("Nouvelle Session"):
         st.session_state.messages = [{"role": "assistant", "content": INITIAL_MESSAGE}]
         st.session_state.logs = []
         st.rerun()
 
-# B. ZONE DE CHAT
+# --- ZONE CENTRALE (CHAT) ---
 chat_container = st.container()
 with chat_container:
     for i, msg in enumerate(st.session_state.messages):
-        # Avatar personnalisé
-        avatar = "🧑‍🎓" if msg["role"] == "user" else "🤖"
+        # Avatars Google style (lettre ou icone)
+        avatar = "🧑‍🎓" if msg["role"] == "user" else "https://img.icons8.com/color/48/google-logo.png"
         
         with st.chat_message(msg["role"], avatar=avatar):
-            if "Voici ma production (Fichier Word" in msg["content"]:
-                with st.expander("📄 Voir le contenu du fichier analysé"):
+            if "Voici mon fichier" in msg["content"]:
+                with st.expander("📄 Fichier joint"):
                     st.write(msg["content"])
             else:
                 st.markdown(msg["content"])
                 
-                # LECTEUR AUDIO
+                # Audio
                 if st.session_state.get("mode_audio", False) and msg["role"] == "assistant" and HAS_AUDIO:
-                    audio_key = f"audio_{i}"
-                    if audio_key not in st.session_state:
+                    key = f"audio_{i}"
+                    if key not in st.session_state:
                         try:
-                            clean_txt = clean_text_for_audio(msg["content"])
-                            tts = gTTS(text=clean_txt, lang='fr')
-                            audio_buffer = BytesIO()
-                            tts.write_to_fp(audio_buffer)
-                            st.session_state[audio_key] = audio_buffer
+                            tts = gTTS(text=clean_text_for_audio(msg["content"]), lang='fr')
+                            buf = BytesIO()
+                            tts.write_to_fp(buf)
+                            st.session_state[key] = buf
                         except: pass
-                    
-                    if audio_key in st.session_state:
-                        st.audio(st.session_state[audio_key], format="audio/mp3")
+                    if key in st.session_state:
+                        st.audio(st.session_state[key], format="audio/mp3")
 
     st.write("<br><br><br>", unsafe_allow_html=True)
 
-# C. BANDEAU LÉGAL
+# --- BANDEAU LEGAL (Toaster Noir) ---
 st.markdown("""
 <div class="fixed-footer">
-    ℹ️ <b>Outil Pédagogique Expérimental (IA)</b><br>
-    Cet assistant peut commettre des erreurs. Vérifiez toujours avec votre professeur. 
-    Aucune donnée personnelle ne doit être saisie ici.
+    Outil Pédagogique Expérimental (IA) - Vérifiez toujours les informations.<br>
+    Ne saisissez aucune donnée personnelle réelle.
 </div>
 """, unsafe_allow_html=True)
 
-# D. RÉPONSE IA
+# --- RÉPONSE AUTO ---
 if st.session_state.messages[-1]["role"] == "user":
-    with st.chat_message("assistant", avatar="🤖"):
-        with st.spinner("Analyse du superviseur..."):
-            
-            final_system_prompt = SYSTEM_PROMPT
+    with st.chat_message("assistant", avatar="https://img.icons8.com/color/48/google-logo.png"):
+        with st.spinner("..."):
+            final_system = SYSTEM_PROMPT
             if st.session_state.get("mode_simple", False):
-                final_system_prompt += "\n\n⚠️ MODE SIMPLIFIÉ : Utilise des mots simples. Fais une liste à puces."
+                final_system += "\n\n⚠️ MODE SIMPLIFIÉ : Mots simples, listes à puces."
 
-            messages_payload = [{"role": "system", "content": final_system_prompt}]
-            messages_payload.extend(st.session_state.messages[-10:])
+            msgs = [{"role": "system", "content": final_system}]
+            msgs.extend(st.session_state.messages[-10:])
             
-            response_content, _ = query_groq_with_rotation(messages_payload)
+            resp, _ = query_groq_with_rotation(msgs)
+            if not resp: resp = "Erreur de service. Veuillez réessayer."
             
-            if not response_content:
-                response_content = "⚠️ Mes systèmes sont saturés. Peux-tu répéter ?"
+            st.markdown(resp)
             
-            st.markdown(response_content)
-            
-    st.session_state.messages.append({"role": "assistant", "content": response_content})
-    
-    if st.session_state.get("mode_audio", False):
-        st.rerun()
+    st.session_state.messages.append({"role": "assistant", "content": resp})
+    if st.session_state.get("mode_audio", False): st.rerun()
 
-# E. SAISIE
-if user_input := st.chat_input("Réponds au superviseur ici..."):
+# --- SAISIE ---
+if user_input := st.chat_input("Répondre..."):
     if not student_name:
-        st.toast("⚠️ Indique ton prénom à gauche !", icon="👉")
+        st.toast("Veuillez indiquer votre prénom dans le menu.", icon="👈")
     else:
         st.session_state.messages.append({"role": "user", "content": user_input})
         log_interaction(student_name, "User", user_input)
