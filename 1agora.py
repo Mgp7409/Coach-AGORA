@@ -43,10 +43,10 @@ def img_to_base64(img_path):
             return base64.b64encode(f.read()).decode()
     return ""
 
-# --- 4. STYLE & CSS AVANCÉ (CORRECTION MISE EN PAGE) ---
+# --- 4. STYLE & CSS AVANCÉ ---
 is_dys = st.session_state.get("mode_dys", False)
 font_family = "'Verdana', sans-serif" if is_dys else "'Segoe UI', 'Roboto', Helvetica, Arial, sans-serif"
-font_size = "18px" if is_dys else "16px" # Légèrement agrandi pour lisibilité
+font_size = "18px" if is_dys else "16px"
 
 st.markdown(f"""
 <style>
@@ -113,31 +113,23 @@ st.markdown(f"""
         box-shadow: 0 2px 4px rgba(0,0,0,0.2);
     }}
 
-    /* --- CORRECTION DU CHAT (MISE EN PAGE) --- */
-    
-    /* Conteneur de message */
+    /* CHAT CORRIGÉ (Mise en page) */
     [data-testid="stChatMessage"] {{
         padding: 1.5rem;
         border-radius: 15px;
         margin-bottom: 1rem;
         box-shadow: 0 1px 2px rgba(0,0,0,0.05);
     }}
-
-    /* Message Assistant (Fond Blanc + Bordure légère) */
     [data-testid="stChatMessage"][data-testid="assistant"] {{
         background-color: #FFFFFF;
         border: 1px solid #E0E0E0;
     }}
-
-    /* Message Élève (Fond Bleu très clair) */
     [data-testid="stChatMessage"][data-testid="user"] {{
         background-color: #E8F0FE;
         border: none;
-        flex-direction: row-reverse; /* Optionnel : met l'avatar à droite */
+        flex-direction: row-reverse;
         text-align: left;
     }}
-
-    /* Avatar */
     [data-testid="stChatMessageAvatar"] img {{
         border-radius: 50%;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
@@ -157,7 +149,6 @@ st.markdown(f"""
         font-size: 11px;
         z-index: 99999;
     }}
-    /* Remonte la zone de saisie pour éviter qu'elle soit cachée */
     [data-testid="stBottom"] {{ bottom: 30px !important; padding-bottom: 10px; }}
     
 </style>
@@ -199,8 +190,8 @@ def extract_text_from_docx(file):
 
 def clean_text_for_audio(text):
     text = re.sub(r'[\*_]{1,3}', '', text)
-    text = re.sub(r'\[.*?\]', '', text) # Enlève les liens [Texte](url)
-    text = re.sub(r'📎.*', '', text) # Ne lit pas la source à voix haute
+    text = re.sub(r'\[.*?\]', '', text)
+    text = re.sub(r'📎.*', '', text)
     return text
 
 def add_notification(msg):
@@ -233,22 +224,23 @@ DB_PREMIERE = {
     }
 }
 
-# --- 8. IA (PROMPT AMÉLIORÉ AVEC SOURCES) ---
+# --- 8. IA (PROMPT AMÉLIORÉ AVEC LIENS CLIQUABLES) ---
 SYSTEM_PROMPT = """
 RÔLE : Tu es le Superviseur Virtuel de l'Agence Pro'AGOrA.
 TON : Professionnel, bienveillant mais exigeant.
 MISSION : Guider l'élève (Bac Pro) sans jamais faire le travail à sa place.
 
 RÈGLES CLÉS :
-1. INCONNU : Si l'élève dit qu'il ne connaît pas un métier ou une notion, EXPLIQUE-LUI brièvement le concept ou les missions principales.
-2. SOURCES : Quand tu donnes une définition, une loi ou une explication métier, ajoute TOUJOURS un émoji trombone 📎 à la fin avec une mention de source générique.
-   Exemple : "...le contrat de travail est obligatoire. 📎 Source : Code du Travail"
-   Exemple : "...le développeur web crée des sites internet. 📎 Source : Fiche Métier"
+1. INCONNU : Si l'élève dit qu'il ne connaît pas un métier ou une notion, EXPLIQUE-LUI brièvement le concept.
+2. LIENS CLIQUABLES : Quand tu donnes une source, utilise le format Markdown pour créer un vrai lien.
+   - Pour un métier, renvoie vers : [Fiche Métier ONISEP](https://www.onisep.fr/metiers)
+   - Pour une loi, renvoie vers : [Service Public](https://www.service-public.fr)
+   Exemple à suivre : "Le contrat de travail est obligatoire. 📎 [Source : Code du Travail](https://www.legifrance.gouv.fr)"
 3. MAÏEUTIQUE : Après avoir expliqué, relance l'élève pour qu'il applique ce savoir au contexte.
 
 SÉCURITÉ : Si données réelles (noms, tel) -> STOP et demande anonymisation.
 
-FORMAT : Réponses aérées, listes à puces si besoin. Max 4 phrases.
+FORMAT : Réponses aérées, listes à puces. Max 4 phrases.
 """
 
 INITIAL_MESSAGE = """
@@ -348,7 +340,7 @@ with c1:
         {logo_html}
         <div>
             <div style="font-size:24px; font-weight:bold; color:#202124; line-height:1.2;">Agence Pro'AGOrA</div>
-            <div style="font-size:12px; color:#5F6368;">Superviseur IA v1.4</div>
+            <div style="font-size:12px; color:#5F6368;">Superviseur IA v1.5</div>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -358,13 +350,8 @@ with c2:
     with st.popover("❓ Aide", use_container_width=True):
         st.markdown("### 📚 Ressources")
         st.info("Besoin d'informations sur un métier ou un cours ?")
-        
-        # LIEN 1 : ENT (Cours)
         st.link_button("📂 Accéder aux Cours (ENT)", "https://cas.ent.auvergnerhonealpes.fr/login?service=https%3A%2F%2Fglieres.ent.auvergnerhonealpes.fr%2Fsg.do%3FPROC%3DPAGE_ACCUEIL")
-        
-        # LIEN 2 : FICHES MÉTIERS (ONISEP) - AJOUTÉ
         st.link_button("🔗 Fiches Métiers (ONISEP)", "https://www.onisep.fr/metiers")
-        
         st.markdown("---")
         st.caption("En cas de problème technique, contactez votre professeur.")
 
@@ -386,15 +373,13 @@ st.markdown("<hr style='margin: 0 0 20px 0;'>", unsafe_allow_html=True)
 
 # --- CHAT CENTRAL ---
 for i, msg in enumerate(st.session_state.messages):
-    # Logique Avatar (Logo Agence vs Élève)
+    # Logique Avatar
     is_assistant = msg["role"] == "assistant"
     avatar = BOT_AVATAR if is_assistant else "🧑‍🎓"
     
-    # Affichage du message avec le nouveau style CSS
     with st.chat_message(msg["role"], avatar=avatar):
         st.markdown(msg["content"])
         
-        # Audio (uniquement pour l'assistant)
         if st.session_state.get("mode_audio") and is_assistant and HAS_AUDIO:
             key = f"aud_{i}"
             if key not in st.session_state:
