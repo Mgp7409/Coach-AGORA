@@ -22,7 +22,7 @@ except ImportError:
 
 # --- 1. CONFIGURATION DE LA PAGE ---
 st.set_page_config(
-    page_title="Superviseur Pro'AGOrA", 
+    page_title="Agence Pro'AGOrA", 
     page_icon="🎓",
     layout="wide",
     initial_sidebar_state="expanded"
