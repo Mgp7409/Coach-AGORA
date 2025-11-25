@@ -3,7 +3,8 @@ import pandas as pd
 import random
 from groq import Groq
 from datetime import datetime
-from io import StringIO
+from io import StringIO, BytesIO
+import re
 
 # --- 0. SÉCURITÉ & DÉPENDANCES ---
 try:
@@ -12,22 +13,47 @@ except ImportError:
     st.error("⚠️ ERREUR CRITIQUE : Le module 'python-docx' manque. Ajoutez-le au fichier requirements.txt")
     st.stop()
 
+# Import gTTS pour l'audio (si manque, on gère l'erreur)
+try:
+    from gtts import gTTS
+    HAS_AUDIO = True
+except ImportError:
+    HAS_AUDIO = False
+
 # --- 1. CONFIGURATION DE LA PAGE ---
 st.set_page_config(
-    page_title="Agence Pro'AGOrA", 
-    page_icon="🏢",
+    page_title="Superviseur Pro'AGOrA", 
+    page_icon="🎓",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# --- 2. STYLE CSS & FOOTER FIXE ---
-st.markdown("""
+# --- 2. GESTION ÉTAT (Session State) ---
+if "mode_dys" not in st.session_state: st.session_state.mode_dys = False
+if "mode_simple" not in st.session_state: st.session_state.mode_simple = False
+if "mode_audio" not in st.session_state: st.session_state.mode_audio = False
+if "messages" not in st.session_state: st.session_state.messages = []
+if "logs" not in st.session_state: st.session_state.logs = []
+
+# --- 3. STYLE CSS (ACCESSIBILITÉ & FOOTER) ---
+dys_css = """
+    html, body, [class*="css"] {
+        font-family: 'Verdana', sans-serif !important;
+        font-size: 18px !important;
+        line-height: 1.8 !important;
+        letter-spacing: 0.5px !important;
+    }
+""" if st.session_state.mode_dys else ""
+
+st.markdown(f"""
 <style>
-    footer {visibility: hidden;}
-    .reportview-container .main .block-container {padding-top: 2rem;}
+    {dys_css}
+    
+    footer {{visibility: hidden;}}
+    .reportview-container .main .block-container {{padding-top: 2rem;}}
     
     /* BANDEAU LÉGAL FIXE EN BAS */
-    .fixed-footer {
+    .fixed-footer {{
         position: fixed;
         left: 0;
         bottom: 0;
@@ -40,16 +66,16 @@ st.markdown("""
         border-top: 1px solid #e1e4e8;
         z-index: 99999;
         line-height: 1.4;
-    }
+    }}
 
     /* Remonter la zone de saisie */
-    [data-testid="stBottom"] {
+    [data-testid="stBottom"] {{
         bottom: 60px !important;
         padding-bottom: 0px !important;
-    }
+    }}
     
     /* Alerte Latérale */
-    .sidebar-alert {
+    .sidebar-alert {{
         padding: 1rem;
         background-color: #ffebee;
         border: 1px solid #ffcdd2;
@@ -59,11 +85,11 @@ st.markdown("""
         font-size: 0.9rem;
         margin-bottom: 1rem;
         text-align: center;
-    }
+    }}
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. GESTION DES CLÉS API (ROTATION) ---
+# --- 4. GESTION DES CLÉS API (ROTATION) ---
 def get_api_keys_list():
     if "groq_keys" in st.secrets:
         return st.secrets["groq_keys"]
@@ -78,7 +104,6 @@ def query_groq_with_rotation(messages):
     
     keys_to_try = list(available_keys)
     random.shuffle(keys_to_try)
-    # Llama 3 70b est le meilleur pour l'analyse de documents
     models = ["llama-3.3-70b-versatile", "mixtral-8x7b-32768", "llama-3.1-8b-instant"]
 
     for key in keys_to_try:
@@ -97,7 +122,7 @@ def query_groq_with_rotation(messages):
         except: continue
     return None, "SATURATION SERVICE."
 
-# --- 4. TRAITEMENT FICHIERS WORD ---
+# --- 5. FONCTIONS UTILITAIRES (TEXTE & AUDIO) ---
 def extract_text_from_docx(file):
     try:
         doc = Document(file)
@@ -112,7 +137,22 @@ def extract_text_from_docx(file):
     except Exception as e:
         return f"Erreur de lecture : {str(e)}"
 
-# --- 5. DONNÉES PÉDAGOGIQUES (LIVRE FOUCHER) ---
+def clean_text_for_audio(text):
+    text = re.sub(r'[\*_]{1,3}', '', text) # Enlève gras/italique
+    text = re.sub(r'#+', '', text) # Enlève titres
+    text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', text) # Enlève liens
+    text = re.sub(r'^\s*-\s+', '', text, flags=re.MULTILINE) # Enlève puces
+    return text
+
+def log_interaction(student, role, content):
+    st.session_state.logs.append({
+        "Heure": datetime.now().strftime("%H:%M:%S"),
+        "Utilisateur": student,
+        "Role": role,
+        "Message": content[:50]
+    })
+
+# --- 6. DONNÉES PÉDAGOGIQUES (LIVRE FOUCHER) ---
 DB_PREMIERE = {
     "GESTION DES ESPACES DE TRAVAIL": {
         "Aménagement des espaces": "COMPÉTENCE : Proposer un aménagement de bureau ergonomique et choisir le mobilier adapté.",
@@ -135,20 +175,6 @@ DB_PREMIERE = {
         "Campagne de Recrutement": "COMPÉTENCE : Projet global de recrutement (de l'annonce à l'intégration)."
     }
 }
-
-# --- 6. INITIALISATION SESSION ---
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-if "logs" not in st.session_state:
-    st.session_state.logs = []
-
-def log_interaction(student, role, content):
-    st.session_state.logs.append({
-        "Heure": datetime.now().strftime("%H:%M:%S"),
-        "Utilisateur": student,
-        "Role": role,
-        "Message": content[:50]
-    })
 
 # --- 7. LE "SUPER PROMPT" PÉDAGOGIQUE ---
 SYSTEM_PROMPT = """
@@ -189,7 +215,6 @@ def lancer_mission():
     dossier = st.session_state.dossier_select
     competence = DB_PREMIERE[theme][dossier]
     
-    # On réinitialise la conversation pour le nouveau scénario
     st.session_state.messages = []
     
     prompt_demarrage = f"""
@@ -200,8 +225,12 @@ def lancer_mission():
     Ne fais PAS la tâche toi-même.
     """
     
-    # On ajoute le message système et le prompt caché
-    msgs = [{"role": "system", "content": SYSTEM_PROMPT}]
+    # Construction du prompt avec option SIMPLIFIÉE
+    final_system_prompt = SYSTEM_PROMPT
+    if st.session_state.mode_simple:
+        final_system_prompt += "\n\n⚠️ MODE SIMPLIFIÉ : Utilise des mots simples. Fais une liste à puces pour les étapes. Sois très clair."
+
+    msgs = [{"role": "system", "content": final_system_prompt}]
     msgs.append({"role": "user", "content": prompt_demarrage})
     
     with st.spinner("Initialisation de la mission..."):
@@ -226,10 +255,27 @@ with st.sidebar:
     student_name = st.text_input("Ton Prénom :", placeholder="Ex: Thomas")
     
     st.divider()
+
+    # --- ZONE ACCESSIBILITÉ ---
+    st.subheader("♿ Accessibilité")
+    col_a, col_b = st.columns(2)
+    with col_a:
+        if st.checkbox("👁️ DYS", value=st.session_state.mode_dys):
+            st.session_state.mode_dys = True
+            st.rerun()
+        else:
+            if st.session_state.mode_dys:
+                st.session_state.mode_dys = False
+                st.rerun()
+    with col_b:
+        st.session_state.mode_audio = st.checkbox("🔊 Audio")
     
-    # --- SÉLECTEUR DE MISSION (FOUCHER 1ère) ---
+    st.session_state.mode_simple = st.checkbox("🧠 Consignes Simplifiées")
+    
+    st.divider()
+    
+    # --- SÉLECTEUR DE MISSION ---
     st.subheader("📚 Choix du Chapitre")
-    # On force sur DB_PREMIERE comme demandé
     theme = st.selectbox("Thème :", list(DB_PREMIERE.keys()), key="theme_select")
     dossier = st.selectbox("Mission :", list(DB_PREMIERE[theme].keys()), key="dossier_select")
     
@@ -242,7 +288,7 @@ with st.sidebar:
             
     st.divider()
     
-    # --- ZONE DÉPÔT DE PRODUCTION (WORD) ---
+    # --- ZONE DÉPÔT ---
     st.subheader("📂 Déposer ma production")
     uploaded_file = st.file_uploader("Fichier Word (.docx)", type=['docx'], label_visibility="collapsed")
     
@@ -257,13 +303,13 @@ with st.sidebar:
 
     st.divider()
 
-    # --- ZONE SAUVEGARDE & REPRISE ---
+    # --- ZONE SAUVEGARDE ---
     st.subheader("💾 Sauvegarde")
     if len(st.session_state.messages) > 1:
         chat_df = pd.DataFrame(st.session_state.messages)
         csv_data = chat_df.to_csv(index=False).encode('utf-8')
         filename = f"agora_{student_name if student_name else 'anonyme'}.csv"
-        st.download_button("📥 Télécharger ma session", csv_data, filename, "text/csv")
+        st.download_button("📥 Télécharger", csv_data, filename, "text/csv")
     
     uploaded_session = st.file_uploader("Reprendre (.csv)", type=['csv'])
     if uploaded_session and st.button("🔄 Restaurer"):
@@ -280,16 +326,33 @@ with st.sidebar:
         st.session_state.logs = []
         st.rerun()
 
-# B. ZONE DE CHAT
+# B. ZONE DE CHAT & AUDIO
 chat_container = st.container()
 with chat_container:
-    for msg in st.session_state.messages:
+    for i, msg in enumerate(st.session_state.messages):
         with st.chat_message(msg["role"], avatar="🤖" if msg["role"] == "assistant" else "🧑‍🎓"):
             if "Voici ma production (Fichier Word" in msg["content"]:
                 with st.expander("📄 Voir le contenu du fichier analysé"):
                     st.write(msg["content"])
             else:
                 st.markdown(msg["content"])
+                
+                # --- LECTEUR AUDIO (Accessibilité) ---
+                if st.session_state.mode_audio and msg["role"] == "assistant" and HAS_AUDIO:
+                    # On génère un ID unique pour le cache audio
+                    audio_key = f"audio_{i}"
+                    if audio_key not in st.session_state:
+                        try:
+                            clean_txt = clean_text_for_audio(msg["content"])
+                            tts = gTTS(text=clean_txt, lang='fr')
+                            audio_buffer = BytesIO()
+                            tts.write_to_fp(audio_buffer)
+                            st.session_state[audio_key] = audio_buffer
+                        except: pass
+                    
+                    if audio_key in st.session_state:
+                        st.audio(st.session_state[audio_key], format="audio/mp3")
+
     st.write("<br><br><br>", unsafe_allow_html=True)
 
 # C. BANDEAU LÉGAL
@@ -305,7 +368,13 @@ st.markdown("""
 if st.session_state.messages[-1]["role"] == "user":
     with st.chat_message("assistant", avatar="🤖"):
         with st.spinner("Analyse du superviseur..."):
-            messages_payload = [{"role": "system", "content": SYSTEM_PROMPT}]
+            
+            # Injection dynamique du mode simplifié
+            final_system_prompt = SYSTEM_PROMPT
+            if st.session_state.mode_simple:
+                final_system_prompt += "\n\n⚠️ MODE SIMPLIFIÉ : Utilise des mots simples. Fais une liste à puces pour les étapes."
+
+            messages_payload = [{"role": "system", "content": final_system_prompt}]
             messages_payload.extend(st.session_state.messages[-10:])
             
             response_content, _ = query_groq_with_rotation(messages_payload)
@@ -316,6 +385,9 @@ if st.session_state.messages[-1]["role"] == "user":
             st.markdown(response_content)
             
     st.session_state.messages.append({"role": "assistant", "content": response_content})
+    # Astuce pour générer l'audio au prochain rafraîchissement si le mode est actif
+    if st.session_state.mode_audio:
+        st.rerun()
 
 # E. SAISIE UTILISATEUR (CHAT)
 if user_input := st.chat_input("Réponds au superviseur ici..."):
