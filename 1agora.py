@@ -43,7 +43,7 @@ def img_to_base64(img_path):
             return base64.b64encode(f.read()).decode()
     return ""
 
-# --- 4. STYLE & CSS AVANCÉ ---
+# --- 4. STYLE & CSS (CORRIGÉ) ---
 is_dys = st.session_state.get("mode_dys", False)
 font_family = "'Verdana', sans-serif" if is_dys else "'Segoe UI', 'Roboto', Helvetica, Arial, sans-serif"
 font_size = "18px" if is_dys else "16px"
@@ -58,32 +58,18 @@ st.markdown(f"""
         background-color: #FFFFFF;
     }}
 
-    /* SUPPRESSION MARGES HEADER */
+    /* HEADER CLEAN */
+    header {{visibility: hidden;}} 
     .reportview-container .main .block-container {{
         padding-top: 1rem;
-        padding-right: 2rem;
-        padding-left: 2rem;
         max-width: 100%;
     }}
-    header {{visibility: hidden;}} 
 
-    /* STYLE NAVBAR */
-    .navbar-container {{
-        display: flex;
-        align-items: center;
-        background-color: white;
-        padding: 10px 20px;
-        border-bottom: 1px solid #E0E0E0;
-        margin-bottom: 10px;
-        height: 80px;
-    }}
-
-    /* BOUTONS NAVBAR */
+    /* NAVBAR */
     div[data-testid="stHorizontalBlock"] button {{
         background-color: transparent;
         border: none;
         color: #5F6368;
-        box-shadow: none;
         font-weight: 500;
     }}
     div[data-testid="stHorizontalBlock"] button:hover {{
@@ -97,15 +83,7 @@ st.markdown(f"""
         border-right: 1px solid #E0E0E0;
     }}
 
-    /* BOUTONS ACTION */
-    div[data-testid="stSidebar"] button {{
-        background-color: #FFFFFF;
-        border: 1px solid #DADCE0;
-        color: #3C4043;
-        border-radius: 8px;
-    }}
-    
-    /* Bouton Primaire */
+    /* BOUTON PRIMAIRE */
     button[kind="primary"] {{
         background: linear-gradient(135deg, #0F9D58 0%, #00C9FF 100%);
         color: white !important;
@@ -113,26 +91,30 @@ st.markdown(f"""
         box-shadow: 0 2px 4px rgba(0,0,0,0.2);
     }}
 
-    /* CHAT CORRIGÉ (Mise en page) */
+    /* --- CORRECTION CHAT (LISIBILITÉ) --- */
+    
     [data-testid="stChatMessage"] {{
-        padding: 1.5rem;
-        border-radius: 15px;
-        margin-bottom: 1rem;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        padding: 1rem;
+        border-radius: 12px;
+        margin-bottom: 0.5rem;
     }}
+
+    /* Assistant : Blanc avec bordure fine */
     [data-testid="stChatMessage"][data-testid="assistant"] {{
         background-color: #FFFFFF;
         border: 1px solid #E0E0E0;
     }}
+
+    /* Élève : Bleu clair (sans inversion pour éviter les bugs d'affichage) */
     [data-testid="stChatMessage"][data-testid="user"] {{
-        background-color: #E8F0FE;
+        background-color: #E3F2FD; /* Bleu Google très clair */
         border: none;
-        flex-direction: row-reverse;
-        text-align: left;
     }}
+
+    /* Avatars */
     [data-testid="stChatMessageAvatar"] img {{
         border-radius: 50%;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         object-fit: cover;
     }}
 
@@ -224,23 +206,22 @@ DB_PREMIERE = {
     }
 }
 
-# --- 8. IA (PROMPT AMÉLIORÉ AVEC LIENS CLIQUABLES) ---
+# --- 8. IA (PROMPT AVEC TROMBONE ET SOURCES) ---
 SYSTEM_PROMPT = """
 RÔLE : Tu es le Superviseur Virtuel de l'Agence Pro'AGOrA.
 TON : Professionnel, bienveillant mais exigeant.
 MISSION : Guider l'élève (Bac Pro) sans jamais faire le travail à sa place.
 
 RÈGLES CLÉS :
-1. INCONNU : Si l'élève dit qu'il ne connaît pas un métier ou une notion, EXPLIQUE-LUI brièvement le concept.
-2. LIENS CLIQUABLES : Quand tu donnes une source, utilise le format Markdown pour créer un vrai lien.
-   - Pour un métier, renvoie vers : [Fiche Métier ONISEP](https://www.onisep.fr/metiers)
-   - Pour une loi, renvoie vers : [Service Public](https://www.service-public.fr)
-   Exemple à suivre : "Le contrat de travail est obligatoire. 📎 [Source : Code du Travail](https://www.legifrance.gouv.fr)"
-3. MAÏEUTIQUE : Après avoir expliqué, relance l'élève pour qu'il applique ce savoir au contexte.
+1. SOURCES (TROMBONE) : Quand tu donnes une information (définition, règle, métier), AJOUTE SYSTÉMATIQUEMENT une source à la fin.
+   - Format : "📎 Source : [Nom de la source]"
+   - Exemple : "Le devis doit comporter la mention 'Bon pour accord'. 📎 Source : Code de Commerce"
+2. PÉDAGOGIE : Si l'élève dit "je ne sais pas" ou "je ne connais pas ce métier", explique-lui brièvement le rôle avant de continuer.
+3. MAÏEUTIQUE : Ne donne pas la réponse complète. Guide par des questions.
 
 SÉCURITÉ : Si données réelles (noms, tel) -> STOP et demande anonymisation.
 
-FORMAT : Réponses aérées, listes à puces. Max 4 phrases.
+FORMAT : Réponses aérées. Max 4 phrases.
 """
 
 INITIAL_MESSAGE = """
@@ -340,30 +321,38 @@ with c1:
         {logo_html}
         <div>
             <div style="font-size:24px; font-weight:bold; color:#202124; line-height:1.2;">Agence Pro'AGOrA</div>
-            <div style="font-size:12px; color:#5F6368;">Superviseur IA v1.5</div>
+            <div style="font-size:12px; color:#5F6368;">Superviseur IA v1.6</div>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-# BOUTON AIDE (LIENS)
+# BOUTON INFOS MÉTIERS (NOUVEAU : LA "BULLE")
 with c2:
+    with st.popover("ℹ️ Métiers", use_container_width=True):
+        st.markdown("### 📋 Fiches Métiers AGOrA")
+        st.info("Tu es perdu ? Voici les rôles principaux :")
+        st.markdown("""
+        **👩‍💼 Assistant(e) de Gestion**
+        *Gère l'administratif, l'accueil, le courrier et les dossiers courants.*
+        
+        **📦 Gestionnaire de Stocks**
+        *Suit les entrées/sorties de marchandises, passe les commandes fournisseurs.*
+        
+        **🛒 Assistant(e) Commercial(e)**
+        *Fait les devis, suit les commandes clients et gère les réclamations.*
+        
+        **👥 Assistant(e) RH**
+        *Prépare les contrats, suit les congés et accueille les nouveaux salariés.*
+        """)
+        st.markdown("---")
+        st.link_button("🔗 Voir toutes les fiches (ONISEP)", "https://www.onisep.fr/metiers")
+
+# BOUTON AIDE (LIENS)
+with c3:
     with st.popover("❓ Aide", use_container_width=True):
         st.markdown("### 📚 Ressources")
-        st.info("Besoin d'informations sur un métier ou un cours ?")
         st.link_button("📂 Accéder aux Cours (ENT)", "https://cas.ent.auvergnerhonealpes.fr/login?service=https%3A%2F%2Fglieres.ent.auvergnerhonealpes.fr%2Fsg.do%3FPROC%3DPAGE_ACCUEIL")
-        st.link_button("🔗 Fiches Métiers (ONISEP)", "https://www.onisep.fr/metiers")
-        st.markdown("---")
-        st.caption("En cas de problème technique, contactez votre professeur.")
-
-# BOUTON NOTIFICATIONS
-with c3:
-    with st.popover("🔔 Notif.", use_container_width=True):
-        st.markdown("### 📜 Historique")
-        if not st.session_state.notifications:
-            st.caption("Aucune notification.")
-        else:
-            for note in st.session_state.notifications[:10]:
-                st.text(f"• {note}")
+        st.caption("En cas de problème, contactez le prof.")
 
 # BOUTON PROFIL
 with c4:
@@ -373,14 +362,13 @@ st.markdown("<hr style='margin: 0 0 20px 0;'>", unsafe_allow_html=True)
 
 # --- CHAT CENTRAL ---
 for i, msg in enumerate(st.session_state.messages):
-    # Logique Avatar
-    is_assistant = msg["role"] == "assistant"
-    avatar = BOT_AVATAR if is_assistant else "🧑‍🎓"
+    avatar = BOT_AVATAR if msg["role"] == "assistant" else "🧑‍🎓"
     
     with st.chat_message(msg["role"], avatar=avatar):
         st.markdown(msg["content"])
         
-        if st.session_state.get("mode_audio") and is_assistant and HAS_AUDIO:
+        # Audio
+        if st.session_state.get("mode_audio") and msg["role"] == "assistant" and HAS_AUDIO:
             key = f"aud_{i}"
             if key not in st.session_state:
                 try:
