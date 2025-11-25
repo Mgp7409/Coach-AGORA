@@ -34,7 +34,9 @@ st.set_page_config(
 # --- 2. GESTION ÉTAT ---
 if "messages" not in st.session_state: st.session_state.messages = []
 if "logs" not in st.session_state: st.session_state.logs = []
-if "notifications" not in st.session_state: st.session_state.notifications = ["Bienvenue sur la plateforme."]
+if "notifications" not in st.session_state: st.session_state.notifications = ["Bienvenue."]
+# Stockage du contexte métier actuel (Fiche de poste, Infos mission...)
+if "current_context_doc" not in st.session_state: st.session_state.current_context_doc = None
 
 # --- 3. OUTILS IMAGE ---
 def img_to_base64(img_path):
@@ -43,7 +45,7 @@ def img_to_base64(img_path):
             return base64.b64encode(f.read()).decode()
     return ""
 
-# --- 4. STYLE & CSS (CORRIGÉ) ---
+# --- 4. STYLE & CSS ---
 is_dys = st.session_state.get("mode_dys", False)
 font_family = "'Verdana', sans-serif" if is_dys else "'Segoe UI', 'Roboto', Helvetica, Arial, sans-serif"
 font_size = "18px" if is_dys else "16px"
@@ -77,41 +79,34 @@ st.markdown(f"""
         background-color: #F1F3F4;
     }}
 
+    /* BOUTON CONTEXTE (Rouge/Actif) */
+    .context-btn button {{
+        color: #D93025 !important;
+        font-weight: bold !important;
+        border: 1px solid #FCE8E6 !important;
+        background-color: #FEF7F6 !important;
+    }}
+
     /* SIDEBAR */
     [data-testid="stSidebar"] {{
         background-color: #F8F9FA;
         border-right: 1px solid #E0E0E0;
     }}
 
-    /* BOUTON PRIMAIRE */
-    button[kind="primary"] {{
-        background: linear-gradient(135deg, #0F9D58 0%, #00C9FF 100%);
-        color: white !important;
-        border: none;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-    }}
-
-    /* --- CORRECTION CHAT (LISIBILITÉ) --- */
-    
+    /* CHAT */
     [data-testid="stChatMessage"] {{
         padding: 1rem;
         border-radius: 12px;
         margin-bottom: 0.5rem;
     }}
-
-    /* Assistant : Blanc avec bordure fine */
     [data-testid="stChatMessage"][data-testid="assistant"] {{
         background-color: #FFFFFF;
         border: 1px solid #E0E0E0;
     }}
-
-    /* Élève : Bleu clair (sans inversion pour éviter les bugs d'affichage) */
     [data-testid="stChatMessage"][data-testid="user"] {{
-        background-color: #E3F2FD; /* Bleu Google très clair */
+        background-color: #E3F2FD;
         border: none;
     }}
-
-    /* Avatars */
     [data-testid="stChatMessageAvatar"] img {{
         border-radius: 50%;
         box-shadow: 0 1px 3px rgba(0,0,0,0.1);
@@ -132,7 +127,6 @@ st.markdown(f"""
         z-index: 99999;
     }}
     [data-testid="stBottom"] {{ bottom: 30px !important; padding-bottom: 10px; }}
-    
 </style>
 """, unsafe_allow_html=True)
 
@@ -148,7 +142,6 @@ def query_groq_with_rotation(messages):
     keys = list(available_keys)
     random.shuffle(keys)
     models = ["llama-3.3-70b-versatile", "mixtral-8x7b-32768"]
-    
     for key in keys:
         try:
             client = Groq(api_key=key)
@@ -167,7 +160,7 @@ def extract_text_from_docx(file):
     try:
         doc = Document(file)
         text = "\n".join([p.text for p in doc.paragraphs if p.text.strip()])
-        return text[:8000] + ("..." if len(text)>8000 else "")
+        return text[:8000]
     except Exception as e: return str(e)
 
 def clean_text_for_audio(text):
@@ -186,41 +179,57 @@ def log_interaction(student, role, content):
         "User": student, "Role": role, "Msg": content[:50]
     })
 
-# --- 7. DONNÉES ---
+# --- 7. DONNÉES MÉTIER RICHES ---
+# Structure : "Nom": {"competence": "...", "doc": { ... }}
+# Si "doc" est présent, un bouton "Fiche de Poste" apparaîtra.
+
 DB_PREMIERE = {
+    "RESSOURCES HUMAINES": {
+        "Recrutement": {
+            "competence": "COMPÉTENCE : Définir le Profil de poste, Rédiger l'annonce d'embauche, Trier des CV.",
+            "doc": {
+                "type": "Fiche de Poste",
+                "titre": "Assistant(e) Commercial(e) (H/F)",
+                "contexte": "La PME 'EcoBat' (Bâtiment écologique, 45 salariés) cherche à renforcer son équipe commerciale.",
+                "missions": [
+                    "Accueil téléphonique et physique des clients.",
+                    "Rédaction et suivi des devis.",
+                    "Mise à jour de la base de données clients.",
+                    "Relance des impayés."
+                ],
+                "profil": "Bac Pro AGOrA, organisé(e), bon relationnel, maîtrise d'Excel.",
+                "lien_titre": "Voir la fiche métier complète (ONISEP)",
+                "lien_url": "https://www.onisep.fr/ressources/univers-metier/metiers/assistant-assistante-commercial-commerciale"
+            }
+        },
+        "Intégration": {"competence": "COMPÉTENCE : Livret d'accueil, Parcours d'arrivée."},
+        "Administratif RH": {"competence": "COMPÉTENCE : Contrat, Registre personnel, Congés."}
+    },
     "GESTION DES ESPACES": {
-        "Aménagement": "COMPÉTENCE : Proposer un aménagement ergonomique.",
-        "Numérique": "COMPÉTENCE : Lister matériel et logiciels (RGPD).",
-        "Ressources": "COMPÉTENCE : Gérer stocks et réservations.",
-        "Info Interne": "COMPÉTENCE : Note de service, Outils collaboratifs."
+        "Aménagement": {"competence": "COMPÉTENCE : Proposer un aménagement ergonomique."},
+        "Numérique": {"competence": "COMPÉTENCE : Lister matériel et logiciels (RGPD)."},
+        "Ressources": {"competence": "COMPÉTENCE : Gérer stocks et réservations."}
     },
     "RELATIONS PARTENAIRES": {
-        "Vente": "COMPÉTENCE : Devis, Négociation, Facturation.",
-        "Réunions": "COMPÉTENCE : Ordre du jour, Réservation, Compte-Rendu.",
-        "Déplacements": "COMPÉTENCE : Réservation Train/Hôtel, Ordre de Mission."
-    },
-    "RESSOURCES HUMAINES": {
-        "Recrutement": "COMPÉTENCE : Profil de poste, Annonce, Tri CV.",
-        "Intégration": "COMPÉTENCE : Livret d'accueil, Parcours d'arrivée.",
-        "Administratif RH": "COMPÉTENCE : Contrat, Registre personnel, Congés."
+        "Vente": {"competence": "COMPÉTENCE : Devis, Négociation, Facturation."},
+        "Réunions": {"competence": "COMPÉTENCE : Ordre du jour, Réservation, Compte-Rendu."},
+        "Déplacements": {"competence": "COMPÉTENCE : Réservation Train/Hôtel, Ordre de Mission."}
     }
 }
 
-# --- 8. IA (PROMPT AVEC TROMBONE ET SOURCES) ---
+# --- 8. IA ---
 SYSTEM_PROMPT = """
 RÔLE : Tu es le Superviseur Virtuel de l'Agence Pro'AGOrA.
 TON : Professionnel, bienveillant mais exigeant.
 MISSION : Guider l'élève (Bac Pro) sans jamais faire le travail à sa place.
 
 RÈGLES CLÉS :
-1. SOURCES (TROMBONE) : Quand tu donnes une information (définition, règle, métier), AJOUTE SYSTÉMATIQUEMENT une source à la fin.
-   - Format : "📎 Source : [Nom de la source]"
-   - Exemple : "Le devis doit comporter la mention 'Bon pour accord'. 📎 Source : Code de Commerce"
-2. PÉDAGOGIE : Si l'élève dit "je ne sais pas" ou "je ne connais pas ce métier", explique-lui brièvement le rôle avant de continuer.
-3. MAÏEUTIQUE : Ne donne pas la réponse complète. Guide par des questions.
+1. SOURCES (TROMBONE) : Quand tu donnes une info, AJOUTE SYSTÉMATIQUEMENT une source à la fin.
+   - "📎 Source : [Nom de la source]"
+2. PÉDAGOGIE : Si l'élève est bloqué, donne-lui un indice.
+3. CONTEXTE : Tu connais les détails de la mission (Fiche de poste, Entreprise) si elles sont fournies. Utilise-les.
 
 SÉCURITÉ : Si données réelles (noms, tel) -> STOP et demande anonymisation.
-
 FORMAT : Réponses aérées. Max 4 phrases.
 """
 
@@ -228,22 +237,44 @@ INITIAL_MESSAGE = """
 👋 **Bonjour.**
 
 Bienvenue à l'Agence **Pro'AGOrA**.
-Je suis votre superviseur virtuel.
-
-Veuillez sélectionner votre **Mission** dans le menu de gauche pour commencer.
+Veuillez sélectionner votre **Mission** à gauche.
 """
 
 if not st.session_state.messages:
     st.session_state.messages.append({"role": "assistant", "content": INITIAL_MESSAGE})
 
 def lancer_mission():
-    competence = DB_PREMIERE[st.session_state.theme][st.session_state.dossier]
+    # Récupération des données
+    data = DB_PREMIERE[st.session_state.theme][st.session_state.dossier]
+    
+    # Gestion de la compatibilité (si ancienne structure sans dict)
+    if isinstance(data, str):
+        competence = data
+        st.session_state.current_context_doc = None
+    else:
+        competence = data.get("competence", "")
+        st.session_state.current_context_doc = data.get("doc", None)
+
     st.session_state.messages = []
+    
+    # Construction du Prompt de démarrage pour l'IA
+    contexte_ia = ""
+    if st.session_state.current_context_doc:
+        doc = st.session_state.current_context_doc
+        contexte_ia = f"""
+        DÉTAILS DU CAS PRATIQUE (A UTILISER) :
+        - Poste : {doc['titre']}
+        - Contexte : {doc.get('contexte', '')}
+        - Missions : {', '.join(doc.get('missions', []))}
+        """
+
     prompt = f"""
     CONTEXTE : Démarrage mission '{st.session_state.dossier}'.
     COMPÉTENCE : {competence}
-    ACTION : Incarne le responsable. Donne le contexte (PME fictive) et la 1ère consigne à l'élève.
+    {contexte_ia}
+    ACTION : Incarne le responsable. Accueille l'élève, donne le contexte et la 1ère consigne.
     """
+    
     msgs = [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}]
     with st.spinner("Initialisation..."):
         resp, _ = query_groq_with_rotation(msgs)
@@ -252,17 +283,14 @@ def lancer_mission():
 
 # --- 9. INTERFACE ---
 
-# --- IMAGES ---
 LOGO_LYCEE = "logo_lycee.png"
 LOGO_AGORA = "logo_agora.png"
 BOT_AVATAR = LOGO_AGORA if os.path.exists(LOGO_AGORA) else "🤖"
 
-# --- SIDEBAR (Menu) ---
+# --- SIDEBAR ---
 with st.sidebar:
-    if os.path.exists(LOGO_LYCEE):
-        st.image(LOGO_LYCEE, width=100)
-    else:
-        st.header("Lycée Pro")
+    if os.path.exists(LOGO_LYCEE): st.image(LOGO_LYCEE, width=100)
+    else: st.header("Lycée Pro")
     
     st.markdown("---")
     st.info("🔒 **Espace Sécurisé** : Données fictives uniquement.")
@@ -295,67 +323,53 @@ with st.sidebar:
             st.rerun()
     
     st.markdown("---")
-    
-    if len(st.session_state.messages) > 1:
-        chat_df = pd.DataFrame(st.session_state.messages)
-        csv_data = chat_df.to_csv(index=False).encode('utf-8')
-        date_str = datetime.now().strftime("%d%m_%H%M")
-        st.download_button("💾 Sauvegarder (CSV)", csv_data, f"agora_{student_name}_{date_str}.csv", "text/csv")
-
     if st.button("🗑️ Reset"):
         st.session_state.messages = [{"role": "assistant", "content": INITIAL_MESSAGE}]
-        st.session_state.notifications = ["Session réinitialisée."]
+        st.session_state.current_context_doc = None
         st.rerun()
 
-# --- HEADER FONCTIONNEL (Navbar) ---
-c1, c2, c3, c4 = st.columns([4, 1, 1, 1])
+# --- HEADER FONCTIONNEL ---
+c1, c2, c3, c4, c5 = st.columns([3, 1, 1, 1, 1]) # Ajout d'une colonne pour le bouton Fiche
 
 with c1:
     logo_html = ""
     if os.path.exists(LOGO_AGORA):
         b64 = img_to_base64(LOGO_AGORA)
         logo_html = f'<img src="data:image/png;base64,{b64}" style="height:45px; vertical-align:middle; margin-right:10px;">'
-    
-    st.markdown(f"""
-    <div style="display:flex; align-items:center;">
-        {logo_html}
-        <div>
-            <div style="font-size:24px; font-weight:bold; color:#202124; line-height:1.2;">Agence Pro'AGOrA</div>
-            <div style="font-size:12px; color:#5F6368;">Superviseur IA v1.6</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown(f"""<div style="display:flex; align-items:center;">{logo_html}<div><div style="font-size:24px; font-weight:bold; color:#202124; line-height:1.2;">Agence Pro'AGOrA</div><div style="font-size:12px; color:#5F6368;">Superviseur IA v1.7</div></div></div>""", unsafe_allow_html=True)
 
-# BOUTON INFOS MÉTIERS (NOUVEAU : LA "BULLE")
+# BOUTON CONTEXTE MÉTIER (S'affiche seulement si une fiche existe)
 with c2:
-    with st.popover("ℹ️ Métiers", use_container_width=True):
-        st.markdown("### 📋 Fiches Métiers AGOrA")
-        st.info("Tu es perdu ? Voici les rôles principaux :")
-        st.markdown("""
-        **👩‍💼 Assistant(e) de Gestion**
-        *Gère l'administratif, l'accueil, le courrier et les dossiers courants.*
-        
-        **📦 Gestionnaire de Stocks**
-        *Suit les entrées/sorties de marchandises, passe les commandes fournisseurs.*
-        
-        **🛒 Assistant(e) Commercial(e)**
-        *Fait les devis, suit les commandes clients et gère les réclamations.*
-        
-        **👥 Assistant(e) RH**
-        *Prépare les contrats, suit les congés et accueille les nouveaux salariés.*
-        """)
-        st.markdown("---")
-        st.link_button("🔗 Voir toutes les fiches (ONISEP)", "https://www.onisep.fr/metiers")
+    if st.session_state.get("current_context_doc"):
+        doc = st.session_state.current_context_doc
+        # On utilise un container pour le style "Bouton Rouge/Important"
+        with st.popover(f"📄 {doc['type']}", use_container_width=True):
+            st.markdown(f"### {doc['titre']}")
+            st.info(doc.get('contexte', ''))
+            st.markdown("**Missions principales :**")
+            for m in doc.get('missions', []):
+                st.markdown(f"- {m}")
+            st.markdown(f"**Profil recherché :** {doc.get('profil', '')}")
+            st.markdown("---")
+            if 'lien_url' in doc:
+                st.link_button(doc.get('lien_titre', 'En savoir plus'), doc['lien_url'])
 
-# BOUTON AIDE (LIENS)
+# BOUTON AIDE
 with c3:
     with st.popover("❓ Aide", use_container_width=True):
         st.markdown("### 📚 Ressources")
         st.link_button("📂 Accéder aux Cours (ENT)", "https://cas.ent.auvergnerhonealpes.fr/login?service=https%3A%2F%2Fglieres.ent.auvergnerhonealpes.fr%2Fsg.do%3FPROC%3DPAGE_ACCUEIL")
-        st.caption("En cas de problème, contactez le prof.")
+        st.link_button("🔗 Fiches Métiers (ONISEP)", "https://www.onisep.fr/metiers")
+
+# BOUTON NOTIF
+with c4:
+    with st.popover("🔔 Notif.", use_container_width=True):
+        st.caption("Historique :")
+        for note in st.session_state.notifications[:5]:
+            st.text(f"• {note}")
 
 # BOUTON PROFIL
-with c4:
+with c5:
     st.button(user_label, disabled=True, use_container_width=True)
 
 st.markdown("<hr style='margin: 0 0 20px 0;'>", unsafe_allow_html=True)
@@ -363,11 +377,8 @@ st.markdown("<hr style='margin: 0 0 20px 0;'>", unsafe_allow_html=True)
 # --- CHAT CENTRAL ---
 for i, msg in enumerate(st.session_state.messages):
     avatar = BOT_AVATAR if msg["role"] == "assistant" else "🧑‍🎓"
-    
     with st.chat_message(msg["role"], avatar=avatar):
         st.markdown(msg["content"])
-        
-        # Audio
         if st.session_state.get("mode_audio") and msg["role"] == "assistant" and HAS_AUDIO:
             key = f"aud_{i}"
             if key not in st.session_state:
@@ -382,10 +393,9 @@ for i, msg in enumerate(st.session_state.messages):
 
 st.markdown("<br><br>", unsafe_allow_html=True)
 
-# --- FOOTER ---
+# --- FOOTER & INPUT ---
 st.markdown('<div class="fixed-footer">Agence Pro\'AGOrA - Environnement Pédagogique Sécurisé - Données Fictives Uniquement</div>', unsafe_allow_html=True)
 
-# --- INPUT & LOGIC ---
 if user_input := st.chat_input("Votre réponse..."):
     if not student_name:
         st.toast("Identifiez-vous dans le menu.", icon="👤")
@@ -398,6 +408,10 @@ if st.session_state.messages[-1]["role"] == "user":
         with st.spinner("Analyse..."):
             sys = SYSTEM_PROMPT
             if st.session_state.get("mode_simple"): sys += " UTILISE DES MOTS SIMPLES."
+            # Injection du contexte métier si existant
+            if st.session_state.get("current_context_doc"):
+                sys += f"\nCONTEXTE MISSION : Tu recrutes pour le poste de {st.session_state.current_context_doc['titre']}."
+
             msgs = [{"role": "system", "content": sys}] + st.session_state.messages[-6:]
             resp, _ = query_groq_with_rotation(msgs)
             if not resp: resp = "Erreur technique."
