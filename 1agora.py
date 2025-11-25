@@ -6,6 +6,7 @@ from datetime import datetime
 from io import StringIO, BytesIO
 import re
 import os
+import base64 # Pour l'encodage des images dans le HTML
 
 # --- 0. SÉCURITÉ & DÉPENDANCES ---
 try:
@@ -32,98 +33,150 @@ st.set_page_config(
 if "messages" not in st.session_state: st.session_state.messages = []
 if "logs" not in st.session_state: st.session_state.logs = []
 
-# --- 3. STYLE PRO (BLEU/VERT AGORA) ---
+# --- 3. OUTILS IMAGE (Pour le Header HTML) ---
+def img_to_base64(img_path):
+    if os.path.exists(img_path):
+        with open(img_path, "rb") as f:
+            return base64.b64encode(f.read()).decode()
+    return ""
+
+# --- 4. STYLE & CSS AVANCÉ ---
 is_dys = st.session_state.get("mode_dys", False)
 font_family = "'Verdana', sans-serif" if is_dys else "'Segoe UI', 'Roboto', Helvetica, Arial, sans-serif"
 font_size = "18px" if is_dys else "15px"
 
 st.markdown(f"""
 <style>
-    /* POLICE & COULEURS */
+    /* GLOBAL */
     html, body, [class*="css"] {{
         font-family: {font_family} !important;
         font-size: {font_size};
         color: #202124;
+        background-color: #FFFFFF;
     }}
 
-    /* SIDEBAR BLANCHE */
-    [data-testid="stSidebar"] {{
+    /* SUPPRESSION DES MARGES PAR DÉFAUT DE STREAMLIT POUR LE HEADER */
+    .reportview-container .main .block-container {{
+        padding-top: 1rem;
+        padding-right: 1rem;
+        padding-left: 1rem;
+        max-width: 100%;
+    }}
+    header {{visibility: hidden;}} /* Cache le header Streamlit (les 3 points) */
+
+    /* BARRE DE NAVIGATION (HEADER) PERSONNALISÉE */
+    .custom-header {{
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
         background-color: #FFFFFF;
+        padding: 15px 20px;
+        border-bottom: 1px solid #E0E0E0;
+        margin-bottom: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+    }}
+    
+    .header-left {{
+        display: flex;
+        align-items: center;
+        gap: 15px;
+    }}
+    
+    .header-title {{
+        font-size: 22px;
+        font-weight: 600;
+        color: #202124;
+        margin: 0;
+    }}
+    
+    .header-subtitle {{
+        font-size: 12px;
+        color: #5F6368;
+        background-color: #F1F3F4;
+        padding: 4px 8px;
+        border-radius: 12px;
+        margin-left: 10px;
+    }}
+
+    .header-right {{
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        color: #5F6368;
+        font-size: 14px;
+    }}
+    
+    .header-icon {{
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        transition: color 0.2s;
+    }}
+    .header-icon:hover {{ color: #1A73E8; }}
+
+    /* SIDEBAR */
+    [data-testid="stSidebar"] {{
+        background-color: #F8F9FA;
         border-right: 1px solid #E0E0E0;
     }}
 
-    /* BOUTONS ARRONDIS & VERTS (Charte AGORA) */
+    /* BOUTONS & INPUTS */
     .stButton > button {{
-        background-color: #F0F4F8;
-        color: #2E3B4E;
-        border: none;
-        border-radius: 12px;
-        padding: 10px 20px;
-        font-weight: 600;
-        transition: 0.2s;
+        background-color: #FFFFFF;
+        border: 1px solid #DADCE0;
+        color: #3C4043;
+        border-radius: 8px;
+        font-weight: 500;
     }}
     .stButton > button:hover {{
-        background-color: #E2E8F0;
+        background-color: #F1F3F4;
+        border-color: #DADCE0;
+        color: #202124;
     }}
-
-    /* BOUTON PRIMAIRE (VERT/CYAN AGORA) */
+    
     button[kind="primary"] {{
-        background: linear-gradient(90deg, #00C9FF 0%, #92FE9D 100%);
-        color: #004e64 !important;
+        background: linear-gradient(135deg, #0F9D58 0%, #00C9FF 100%);
+        color: white !important;
         border: none;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    }}
-    button[kind="primary"]:hover {{
-        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-        transform: translateY(-1px);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
     }}
 
-    /* CHAMPS SAISIE */
-    .stTextInput input {{
-        border-radius: 10px;
-        border: 1px solid #E0E0E0;
+    /* CHAT */
+    [data-testid="stChatMessage"] {{
+        background-color: transparent;
+        padding: 1rem;
+        border-radius: 8px;
     }}
-    .stTextInput input:focus {{
-        border-color: #00C9FF;
-        box-shadow: 0 0 0 2px rgba(0,201,255,0.2);
+    [data-testid="stChatMessage"][data-testid="user"] {{
+        background-color: #F1F3F4;
     }}
 
-    /* AVATAR ROND */
+    /* AVATAR */
     [data-testid="stChatMessageAvatar"] img {{
         border-radius: 50%;
-        object-fit: cover;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }}
 
-    /* BANDEAU LÉGAL */
+    /* FOOTER & INPUT */
     .fixed-footer {{
         position: fixed;
         left: 0;
         bottom: 0;
         width: 100%;
-        background: white;
-        color: #666;
+        background: #323232;
+        color: #FFF;
         text-align: center;
-        padding: 8px;
+        padding: 6px;
         font-size: 11px;
-        border-top: 1px solid #eee;
         z-index: 99999;
     }}
-    [data-testid="stBottom"] {{ bottom: 50px !important; }}
-
-    /* ALERTE SIDEBAR */
-    .sidebar-alert {{
-        background-color: #FFF4F4;
-        color: #D32F2F;
-        padding: 12px;
-        border-radius: 8px;
-        font-size: 13px;
-        font-weight: 600;
-        border-left: 4px solid #D32F2F;
-    }}
+    [data-testid="stBottom"] {{ bottom: 40px !important; }}
 </style>
 """, unsafe_allow_html=True)
 
-# --- 4. LOGIQUE API ---
+# --- 5. LOGIQUE API ---
 def get_api_keys_list():
     if "groq_keys" in st.secrets: return st.secrets["groq_keys"]
     elif "GROQ_API_KEY" in st.secrets: return [st.secrets["GROQ_API_KEY"]]
@@ -149,7 +202,7 @@ def query_groq_with_rotation(messages):
         except: continue
     return None, "SATURATION"
 
-# --- 5. OUTILS ---
+# --- 6. OUTILS ---
 def extract_text_from_docx(file):
     try:
         doc = Document(file)
@@ -168,7 +221,7 @@ def log_interaction(student, role, content):
         "User": student, "Role": role, "Msg": content[:50]
     })
 
-# --- 6. DONNÉES ---
+# --- 7. DONNÉES ---
 DB_PREMIERE = {
     "GESTION DES ESPACES": {
         "Aménagement": "COMPÉTENCE : Proposer un aménagement ergonomique.",
@@ -188,7 +241,7 @@ DB_PREMIERE = {
     }
 }
 
-# --- 7. IA ---
+# --- 8. IA ---
 SYSTEM_PROMPT = """
 RÔLE : Tu es le Superviseur Virtuel de l'Agence Pro'AGOrA.
 TON : Professionnel, bienveillant mais exigeant.
@@ -227,37 +280,25 @@ def lancer_mission():
         resp, _ = query_groq_with_rotation(msgs)
         st.session_state.messages.append({"role": "assistant", "content": resp})
 
-# --- 8. INTERFACE ---
+# --- 9. INTERFACE ---
 
-# --- CONFIG IMAGES ---
-# 1. Logo Lycée (Sidebar)
-LOGO_LYCEE = "logo_lycee.png" 
-# 2. Logo Agence (Avatar Bot)
+# --- IMAGES ---
+LOGO_LYCEE = "logo_lycee.png"
 LOGO_AGORA = "logo_agora.png"
-
-# Avatar du Bot : Utilise le logo AGORA si présent, sinon Robot
 BOT_AVATAR = LOGO_AGORA if os.path.exists(LOGO_AGORA) else "🤖"
 
 # --- SIDEBAR ---
 with st.sidebar:
-    # AFFICHE LE LOGO DU LYCEE EN HAUT A GAUCHE
     if os.path.exists(LOGO_LYCEE):
-        st.image(LOGO_LYCEE, width=100)
+        st.image(LOGO_LYCEE, width=120)
     else:
-        st.header("Lycée Pro") # Fallback si pas d'image
+        st.header("Lycée Pro")
     
     st.markdown("---")
+    st.info("🔒 **Espace Sécurisé** : Données fictives uniquement.")
     
-    st.markdown("""
-    <div class="sidebar-alert">
-    🔒 <b>Espace Sécurisé</b><br>
-    Utilisez uniquement des données fictives.
-    </div>
-    """, unsafe_allow_html=True)
+    student_name = st.text_input("Prénom", placeholder="Ex: Camille")
     
-    student_name = st.text_input("Votre Prénom", placeholder="Ex: Alex")
-    
-    # Menu Mission
     st.subheader("📂 Missions")
     st.session_state.theme = st.selectbox("Thème", list(DB_PREMIERE.keys()))
     st.session_state.dossier = st.selectbox("Dossier", list(DB_PREMIERE[st.session_state.theme].keys()))
@@ -267,55 +308,61 @@ with st.sidebar:
             lancer_mission()
             st.rerun()
         else:
-            st.toast("Prénom requis !", icon="⚠️")
+            st.warning("Prénom requis !")
             
-    # Options
-    with st.expander("🛠️ Options & Accessibilité"):
+    with st.expander("🛠️ Options"):
         st.checkbox("Mode DYS", key="mode_dys")
-        st.checkbox("Lecture Audio", key="mode_audio")
-        st.checkbox("Consignes Simplifiées", key="mode_simple")
+        st.checkbox("Audio", key="mode_audio")
+        st.checkbox("Simplifié", key="mode_simple")
         
-    # Upload
-    uploaded_file = st.file_uploader("Déposer un travail (.docx)", type=['docx'])
-    if uploaded_file and st.button("Envoyer à la correction"):
-        txt = extract_text_from_docx(uploaded_file)
-        st.session_state.messages.append({"role": "user", "content": f"PROPOSITION : {txt}"})
-        st.rerun()
+    uploaded_file = st.file_uploader("Rendre un travail (.docx)", type=['docx'])
+    if uploaded_file and student_name:
+        if st.button("Envoyer à la correction"):
+            txt = extract_text_from_docx(uploaded_file)
+            st.session_state.messages.append({"role": "user", "content": f"PROPOSITION : {txt}"})
+            st.rerun()
     
     st.markdown("---")
     
-    # --- BOUTON SAUVEGARDE (Ajouté) ---
+    # SAUVEGARDE
     if len(st.session_state.messages) > 1:
-        # Conversion de l'historique en CSV
         chat_df = pd.DataFrame(st.session_state.messages)
         csv_data = chat_df.to_csv(index=False).encode('utf-8')
-        
         date_str = datetime.now().strftime("%d%m_%H%M")
-        file_name = f"suivi_agora_{student_name}_{date_str}.csv"
-        
-        st.download_button(
-            label="💾 Sauvegarder la conversation",
-            data=csv_data,
-            file_name=file_name,
-            mime="text/csv",
-            help="Télécharge un fichier pour garder une trace de ton travail."
-        )
+        st.download_button("💾 Sauvegarder (CSV)", csv_data, f"agora_{student_name}_{date_str}.csv", "text/csv")
 
     if st.button("🗑️ Reset"):
         st.session_state.messages = [{"role": "assistant", "content": INITIAL_MESSAGE}]
         st.rerun()
 
-# --- CHAT CENTRAL ---
-st.title("Agence Pro'AGOrA")
+# --- HEADER PERSONNALISÉ (HTML/CSS) ---
+# On prépare le logo AGORA en base64 pour l'afficher dans le HTML
+logo_html = ""
+if os.path.exists(LOGO_AGORA):
+    b64_logo = img_to_base64(LOGO_AGORA)
+    logo_html = f'<img src="data:image/png;base64,{b64_logo}" style="height:40px; margin-right:10px;">'
 
+st.markdown(f"""
+<div class="custom-header">
+    <div class="header-left">
+        {logo_html}
+        <div>
+            <div class="header-title">Agence Pro'AGOrA <span class="header-subtitle">Superviseur IA</span></div>
+        </div>
+    </div>
+    <div class="header-right">
+        <div class="header-icon">❓ Aide</div>
+        <div class="header-icon">🔔 Notifications</div>
+        <div class="header-icon">👤 {student_name if student_name else "Invité"}</div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+# --- CHAT CENTRAL ---
 for i, msg in enumerate(st.session_state.messages):
-    # Choix de l'avatar : Logo AGORA pour l'assistant, Étudiant pour l'user
     avatar = BOT_AVATAR if msg["role"] == "assistant" else "🧑‍🎓"
-    
     with st.chat_message(msg["role"], avatar=avatar):
         st.markdown(msg["content"])
-        
-        # Audio Player
         if st.session_state.get("mode_audio") and msg["role"] == "assistant" and HAS_AUDIO:
             key = f"aud_{i}"
             if key not in st.session_state:
@@ -330,7 +377,10 @@ for i, msg in enumerate(st.session_state.messages):
 
 st.markdown("<br><br>", unsafe_allow_html=True)
 
-# --- INPUT & FOOTER ---
+# --- FOOTER ---
+st.markdown('<div class="fixed-footer">Agence Pro\'AGOrA v1.2 - Environnement Pédagogique Sécurisé - Données Fictives Uniquement</div>', unsafe_allow_html=True)
+
+# --- INPUT & LOGIC ---
 if user_input := st.chat_input("Votre réponse..."):
     if not student_name:
         st.toast("Identifiez-vous dans le menu.", icon="👤")
@@ -338,19 +388,15 @@ if user_input := st.chat_input("Votre réponse..."):
         st.session_state.messages.append({"role": "user", "content": user_input})
         st.rerun()
 
-# Réponse IA
 if st.session_state.messages[-1]["role"] == "user":
-    # Avatar AGORA ici aussi pour le spinner de chargement
     with st.chat_message("assistant", avatar=BOT_AVATAR):
         with st.spinner("Analyse..."):
             sys = SYSTEM_PROMPT
             if st.session_state.get("mode_simple"): sys += " UTILISE DES MOTS SIMPLES."
             msgs = [{"role": "system", "content": sys}] + st.session_state.messages[-6:]
-            
             resp, _ = query_groq_with_rotation(msgs)
-            if not resp: resp = "Erreur technique. Réessayez."
+            if not resp: resp = "Erreur technique."
             st.markdown(resp)
             st.session_state.messages.append({"role": "assistant", "content": resp})
             if st.session_state.get("mode_audio"): st.rerun()
-
-st.markdown('<div class="fixed-footer">Agence Pro\'AGOrA v1.0 - Outil Pédagogique IA - Données Fictives Uniquement</div>', unsafe_allow_html=True)
+            
