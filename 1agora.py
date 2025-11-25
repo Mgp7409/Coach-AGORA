@@ -241,7 +241,7 @@ def lancer_mission():
 
 # --- 8. INTERFACE GRAPHIQUE ---
 
-st.title("🎓 Supervision Agence Pro'AGOrA")
+st.title("🎓 Agence Pro'AGOrA")
 
 # A. BARRE LATÉRALE
 with st.sidebar:
