@@ -13,7 +13,7 @@ except ImportError:
     st.error("⚠️ ERREUR CRITIQUE : Le module 'python-docx' manque. Ajoutez-le au fichier requirements.txt")
     st.stop()
 
-# Import gTTS pour l'audio (si manque, on gère l'erreur)
+# Import gTTS pour l'audio (si manque, on gère l'erreur sans planter)
 try:
     from gtts import gTTS
     HAS_AUDIO = True
@@ -23,19 +23,22 @@ except ImportError:
 # --- 1. CONFIGURATION DE LA PAGE ---
 st.set_page_config(
     page_title="Agence Pro'AGOrA", 
-    page_icon="🎓",
+    page_icon="🏢",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 # --- 2. GESTION ÉTAT (Session State) ---
-# Initialisation des variables de session si elles n'existent pas
 if "messages" not in st.session_state: st.session_state.messages = []
 if "logs" not in st.session_state: st.session_state.logs = []
-# Note: mode_dys, mode_audio, mode_simple sont gérés directement par les keys des widgets
+# Note: mode_dys, mode_audio, mode_simple sont gérés par les widgets
 
-# --- 3. STYLE CSS (ACCESSIBILITÉ & FOOTER) ---
-# On récupère l'état via la clé du widget (avec une valeur par défaut False si pas encore créée)
+# --- 3. STYLE CSS & CHARTE GRAPHIQUE ---
+# Couleurs "Entreprise" (Bleu Pro)
+PRIMARY_COLOR = "#0F52BA"
+BG_COLOR = "#F0F2F6"
+
+# On récupère l'état DYS
 is_dys = st.session_state.get("mode_dys", False)
 
 dys_css = """
@@ -51,6 +54,7 @@ st.markdown(f"""
 <style>
     {dys_css}
     
+    /* Masquer le footer Streamlit */
     footer {{visibility: hidden;}}
     .reportview-container .main .block-container {{padding-top: 2rem;}}
     
@@ -61,32 +65,40 @@ st.markdown(f"""
         bottom: 0;
         width: 100%;
         background-color: #f8f9fa;
-        color: #555;
+        color: #6c757d;
         text-align: center;
         padding: 8px 10px;
-        font-size: 12px;
+        font-size: 11px;
         border-top: 1px solid #e1e4e8;
         z-index: 99999;
         line-height: 1.4;
+        font-family: sans-serif;
     }}
 
-    /* Remonter la zone de saisie */
+    /* Remonter la zone de saisie pour ne pas être cachée */
     [data-testid="stBottom"] {{
-        bottom: 60px !important;
+        bottom: 50px !important;
         padding-bottom: 0px !important;
     }}
     
-    /* Alerte Latérale */
+    /* STYLE ALERTE ROUGE (Sidebar) */
     .sidebar-alert {{
-        padding: 1rem;
-        background-color: #ffebee;
-        border: 1px solid #ffcdd2;
-        color: #c62828;
-        border-radius: 5px;
-        font-weight: bold;
-        font-size: 0.9rem;
+        padding: 12px;
+        background-color: #fff5f5;
+        border-left: 5px solid #c53030;
+        color: #c53030;
+        border-radius: 4px;
+        font-weight: 600;
+        font-size: 0.85rem;
         margin-bottom: 1rem;
-        text-align: center;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    }}
+
+    /* BOUTONS STYLISÉS */
+    .stButton > button {{
+        width: 100%;
+        border-radius: 6px;
+        font-weight: bold;
     }}
 </style>
 """, unsafe_allow_html=True)
@@ -124,7 +136,7 @@ def query_groq_with_rotation(messages):
         except: continue
     return None, "SATURATION SERVICE."
 
-# --- 5. FONCTIONS UTILITAIRES (TEXTE & AUDIO) ---
+# --- 5. FONCTIONS UTILITAIRES ---
 def extract_text_from_docx(file):
     try:
         doc = Document(file)
@@ -154,7 +166,7 @@ def log_interaction(student, role, content):
         "Message": content[:50]
     })
 
-# --- 6. DONNÉES PÉDAGOGIQUES (LIVRE FOUCHER) ---
+# --- 6. DONNÉES PÉDAGOGIQUES ---
 DB_PREMIERE = {
     "GESTION DES ESPACES DE TRAVAIL": {
         "Aménagement des espaces": "COMPÉTENCE : Proposer un aménagement de bureau ergonomique et choisir le mobilier adapté.",
@@ -178,7 +190,7 @@ DB_PREMIERE = {
     }
 }
 
-# --- 7. LE "SUPER PROMPT" PÉDAGOGIQUE ---
+# --- 7. PROMPT SYSTÈME ---
 SYSTEM_PROMPT = """
 RÔLE : Tu es le Superviseur Virtuel de l'Agence Pro'AGOrA.
 TON : Professionnel, encourageant mais exigeant (Vouvoiement).
@@ -211,7 +223,7 @@ Bienvenue à l'Agence Pro'AGOrA.
 if not st.session_state.messages:
     st.session_state.messages.append({"role": "assistant", "content": INITIAL_MESSAGE})
 
-# Fonction pour lancer le scénario depuis le menu
+# Fonction de lancement
 def lancer_mission():
     theme = st.session_state.theme_select
     dossier = st.session_state.dossier_select
@@ -227,30 +239,37 @@ def lancer_mission():
     Ne fais PAS la tâche toi-même.
     """
     
-    # Construction du prompt avec option SIMPLIFIÉE
     final_system_prompt = SYSTEM_PROMPT
     if st.session_state.get("mode_simple", False):
-        final_system_prompt += "\n\n⚠️ MODE SIMPLIFIÉ : Utilise des mots simples. Fais une liste à puces pour les étapes. Sois très clair."
+        final_system_prompt += "\n\n⚠️ MODE SIMPLIFIÉ : Utilise des mots simples. Fais une liste à puces."
 
     msgs = [{"role": "system", "content": final_system_prompt}]
     msgs.append({"role": "user", "content": prompt_demarrage})
     
-    with st.spinner("Initialisation de la mission..."):
+    with st.spinner("Chargement du scénario..."):
         intro_bot, _ = query_groq_with_rotation(msgs)
         st.session_state.messages.append({"role": "assistant", "content": intro_bot})
 
 # --- 8. INTERFACE GRAPHIQUE ---
 
+# En-tête principal
 st.title("🎓 Agence Pro'AGOrA")
+st.caption("Plateforme pédagogique d'entraînement aux situations professionnelles.")
 
 # A. BARRE LATÉRALE
 with st.sidebar:
-    st.image("https://img.icons8.com/color/96/student-center.png", width=80)
-    st.header("Profil & Mission")
+    # LOGO DU LYCÉE (Placeholder)
+    # Remplacez l'URL ci-dessous par celle de votre lycée
+    LOGO_URL = "https://img.icons8.com/clouds/200/school.png" 
+    st.image(LOGO_URL, width=120)
     
+    st.header("👤 Espace Élève")
+    
+    # ALERTE ROUGE
     st.markdown("""
     <div class="sidebar-alert">
-    🚫 INTERDIT : Données réelles.
+    🚫 <b>INTERDIT</b><br>
+    Ne jamais saisir de données personnelles réelles (RGPD).
     </div>
     """, unsafe_allow_html=True)
     
@@ -258,26 +277,24 @@ with st.sidebar:
     
     st.divider()
 
-    # --- ZONE ACCESSIBILITÉ (CORRIGÉE) ---
+    # ACCESSIBILITÉ
     st.subheader("♿ Accessibilité")
     col_a, col_b = st.columns(2)
     with col_a:
-        # Simplification : On utilise "key" pour lier directement à session_state
-        # Cela évite le bug "removeChild" car Streamlit gère le cycle de vie
-        st.checkbox("👁️ DYS", key="mode_dys")
+        st.checkbox("👁️ DYS", key="mode_dys", help="Police adaptée pour la dyslexie")
     with col_b:
-        st.checkbox("🔊 Audio", key="mode_audio")
+        st.checkbox("🔊 Audio", key="mode_audio", help="Lecture à voix haute des réponses")
     
-    st.checkbox("🧠 Consignes Simplifiées", key="mode_simple")
+    st.checkbox("🧠 Consignes Simplifiées", key="mode_simple", help="Langage plus simple et structuré")
     
     st.divider()
     
-    # --- SÉLECTEUR DE MISSION ---
-    st.subheader("📚 Choix du Chapitre")
+    # CHOIX MISSION
+    st.subheader("📚 Choix de la Mission")
     theme = st.selectbox("Thème :", list(DB_PREMIERE.keys()), key="theme_select")
-    dossier = st.selectbox("Mission :", list(DB_PREMIERE[theme].keys()), key="dossier_select")
+    dossier = st.selectbox("Dossier :", list(DB_PREMIERE[theme].keys()), key="dossier_select")
     
-    if st.button("🚀 LANCER LA MISSION", type="primary"):
+    if st.button("🚀 LANCER LE SCÉNARIO", type="primary"):
         if student_name:
             lancer_mission()
             st.rerun()
@@ -286,13 +303,13 @@ with st.sidebar:
             
     st.divider()
     
-    # --- ZONE DÉPÔT ---
-    st.subheader("📂 Déposer ma production")
+    # DÉPÔT FICHIER
+    st.subheader("📂 Rendre un travail")
     uploaded_file = st.file_uploader("Fichier Word (.docx)", type=['docx'], label_visibility="collapsed")
     
     if uploaded_file and student_name:
         if st.button("📤 Envoyer à la correction"):
-            with st.spinner("Lecture et analyse..."):
+            with st.spinner("Analyse du document..."):
                 text_content = extract_text_from_docx(uploaded_file)
                 prompt_analysis = f"Voici ma production (Fichier Word : {uploaded_file.name}) :\n\n{text_content}"
                 st.session_state.messages.append({"role": "user", "content": prompt_analysis})
@@ -301,43 +318,35 @@ with st.sidebar:
 
     st.divider()
 
-    # --- ZONE SAUVEGARDE ---
-    st.subheader("💾 Sauvegarde")
+    # SAUVEGARDE
     if len(st.session_state.messages) > 1:
         chat_df = pd.DataFrame(st.session_state.messages)
         csv_data = chat_df.to_csv(index=False).encode('utf-8')
         filename = f"agora_{student_name if student_name else 'anonyme'}.csv"
-        st.download_button("📥 Télécharger", csv_data, filename, "text/csv")
+        st.download_button("💾 Sauvegarder ma session", csv_data, filename, "text/csv")
     
-    uploaded_session = st.file_uploader("Reprendre (.csv)", type=['csv'])
-    if uploaded_session and st.button("🔄 Restaurer"):
-        try:
-            df_restored = pd.read_csv(uploaded_session)
-            if 'role' in df_restored.columns and 'content' in df_restored.columns:
-                st.session_state.messages = df_restored.to_dict('records')
-                st.success("✅ Session restaurée !")
-                st.rerun()
-        except: st.error("❌ Fichier invalide.")
-
-    if st.button("🗑️ Reset"):
+    # BOUTON RESET
+    if st.button("🗑️ Nouvelle Session"):
         st.session_state.messages = [{"role": "assistant", "content": INITIAL_MESSAGE}]
         st.session_state.logs = []
         st.rerun()
 
-# B. ZONE DE CHAT & AUDIO
+# B. ZONE DE CHAT
 chat_container = st.container()
 with chat_container:
     for i, msg in enumerate(st.session_state.messages):
-        with st.chat_message(msg["role"], avatar="🤖" if msg["role"] == "assistant" else "🧑‍🎓"):
+        # Avatar personnalisé
+        avatar = "🧑‍🎓" if msg["role"] == "user" else "🤖"
+        
+        with st.chat_message(msg["role"], avatar=avatar):
             if "Voici ma production (Fichier Word" in msg["content"]:
                 with st.expander("📄 Voir le contenu du fichier analysé"):
                     st.write(msg["content"])
             else:
                 st.markdown(msg["content"])
                 
-                # --- LECTEUR AUDIO (Accessibilité) ---
+                # LECTEUR AUDIO
                 if st.session_state.get("mode_audio", False) and msg["role"] == "assistant" and HAS_AUDIO:
-                    # On génère un ID unique pour le cache audio
                     audio_key = f"audio_{i}"
                     if audio_key not in st.session_state:
                         try:
@@ -362,15 +371,14 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# D. LOGIQUE DE RÉPONSE IA
+# D. RÉPONSE IA
 if st.session_state.messages[-1]["role"] == "user":
     with st.chat_message("assistant", avatar="🤖"):
         with st.spinner("Analyse du superviseur..."):
             
-            # Injection dynamique du mode simplifié
             final_system_prompt = SYSTEM_PROMPT
             if st.session_state.get("mode_simple", False):
-                final_system_prompt += "\n\n⚠️ MODE SIMPLIFIÉ : Utilise des mots simples. Fais une liste à puces pour les étapes."
+                final_system_prompt += "\n\n⚠️ MODE SIMPLIFIÉ : Utilise des mots simples. Fais une liste à puces."
 
             messages_payload = [{"role": "system", "content": final_system_prompt}]
             messages_payload.extend(st.session_state.messages[-10:])
@@ -384,11 +392,10 @@ if st.session_state.messages[-1]["role"] == "user":
             
     st.session_state.messages.append({"role": "assistant", "content": response_content})
     
-    # Relance automatique uniquement si l'audio est activé pour afficher le lecteur
     if st.session_state.get("mode_audio", False):
         st.rerun()
 
-# E. SAISIE UTILISATEUR (CHAT)
+# E. SAISIE
 if user_input := st.chat_input("Réponds au superviseur ici..."):
     if not student_name:
         st.toast("⚠️ Indique ton prénom à gauche !", icon="👉")
