@@ -22,7 +22,7 @@ except ImportError:
 
 # --- 1. CONFIGURATION DE LA PAGE ---
 st.set_page_config(
-    page_title="Agence Pro'AGOrA", 
+    page_title="Agence PRO'AGORA", 
     page_icon="🏢",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -34,10 +34,6 @@ if "logs" not in st.session_state: st.session_state.logs = []
 # Note: mode_dys, mode_audio, mode_simple sont gérés par les widgets
 
 # --- 3. STYLE CSS & CHARTE GRAPHIQUE ---
-# Couleurs "Entreprise" (Bleu Pro)
-PRIMARY_COLOR = "#0F52BA"
-BG_COLOR = "#F0F2F6"
-
 # On récupère l'état DYS
 is_dys = st.session_state.get("mode_dys", False)
 
@@ -252,16 +248,16 @@ def lancer_mission():
 
 # --- 8. INTERFACE GRAPHIQUE ---
 
-# En-tête principal
-st.title("🎓 Agence Pro'AGOrA")
+# En-tête principal (Modifié selon demande)
+st.title("🎓 Agence Pro'AGORA")
 st.caption("Plateforme pédagogique d'entraînement aux situations professionnelles.")
 
 # A. BARRE LATÉRALE
 with st.sidebar:
-    # LOGO DU LYCÉE (Placeholder)
-    # Remplacez l'URL ci-dessous par celle de votre lycée
-    LOGO_URL = "https://img.icons8.com/clouds/200/school.png" 
-    st.image(LOGO_URL, width=120)
+    # LOGO DU LYCÉE
+    # Assurez-vous que le fichier "logo_lycee.png" est bien à la racine de votre GitHub
+    # Sinon, remettez l'URL : "https://img.icons8.com/clouds/200/school.png"
+    st.image("logo_lycee.png", width=120)
     
     st.header("👤 Espace Élève")
     
@@ -277,7 +273,7 @@ with st.sidebar:
     
     st.divider()
 
-    # ACCESSIBILITÉ
+    # ACCESSIBILITÉ (Correction Bug removeChild appliquée)
     st.subheader("♿ Accessibilité")
     col_a, col_b = st.columns(2)
     with col_a:
