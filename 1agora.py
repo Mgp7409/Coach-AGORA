@@ -333,13 +333,13 @@ with c1:
     </div>
     """, unsafe_allow_html=True)
 
-# BOUTON AIDE (LIEN WEB)
+# BOUTON AIDE (LIEN WEB vers ENT)
 with c2:
     with st.popover("❓ Aide", use_container_width=True):
         st.markdown("### 📚 Centre de Ressources")
         st.info("Besoin d'un mémo ou d'un cours ?")
-        # REMPLACEZ L'URL CI-DESSOUS par votre Drive / Moodle / Site
-        st.link_button("📂 Accéder aux Cours", "https://www.votre-site-pedagogique.fr")
+        # LIEN MIS À JOUR AVEC L'ADRESSE ENT AUVERGNE-RHÔNE-ALPES
+        st.link_button("📂 Accéder aux Cours (ENT)", "https://cas.ent.auvergnerhonealpes.fr/login?service=https%3A%2F%2Fglieres.ent.auvergnerhonealpes.fr%2Fsg.do%3FPROC%3DPAGE_ACCUEIL")
         st.markdown("---")
         st.caption("En cas de problème technique, contactez votre professeur.")
 
