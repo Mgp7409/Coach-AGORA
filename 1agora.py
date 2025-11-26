@@ -28,14 +28,13 @@ st.set_page_config(
     page_title="Agence Pro'AGOrA", 
     page_icon=PAGE_ICON, 
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="auto" # "auto" laisse Streamlit choisir (fermé sur mobile, ouvert sur PC)
 )
 
 # --- 2. GESTION ÉTAT ---
 if "messages" not in st.session_state: st.session_state.messages = []
 if "logs" not in st.session_state: st.session_state.logs = []
 if "notifications" not in st.session_state: st.session_state.notifications = ["Bienvenue."]
-# Stockage du contexte métier actuel (Fiche de poste, Infos mission...)
 if "current_context_doc" not in st.session_state: st.session_state.current_context_doc = None
 
 # --- 3. OUTILS IMAGE ---
@@ -45,41 +44,44 @@ def img_to_base64(img_path):
             return base64.b64encode(f.read()).decode()
     return ""
 
-# --- 4. STYLE & CSS ---
+# --- 4. STYLE & CSS RESPONSIVE (MOBILE & DESKTOP) ---
 is_dys = st.session_state.get("mode_dys", False)
 font_family = "'Verdana', sans-serif" if is_dys else "'Segoe UI', 'Roboto', Helvetica, Arial, sans-serif"
-font_size = "18px" if is_dys else "16px"
+base_font_size = "18px" if is_dys else "16px"
 
 st.markdown(f"""
 <style>
-    /* GLOBAL */
+    /* --- GLOBAL --- */
     html, body, [class*="css"] {{
         font-family: {font_family} !important;
-        font-size: {font_size};
+        font-size: {base_font_size};
         color: #202124;
         background-color: #FFFFFF;
     }}
 
-    /* HEADER CLEAN */
+    /* --- HEADER CLEAN --- */
     header {{visibility: hidden;}} 
     .reportview-container .main .block-container {{
         padding-top: 1rem;
+        padding-bottom: 5rem; /* Espace pour le footer */
         max-width: 100%;
     }}
 
-    /* NAVBAR */
+    /* --- NAVBAR (Barre du haut) --- */
     div[data-testid="stHorizontalBlock"] button {{
         background-color: transparent;
-        border: none;
+        border: 1px solid transparent;
         color: #5F6368;
         font-weight: 500;
+        padding: 0.2rem 0.5rem;
     }}
     div[data-testid="stHorizontalBlock"] button:hover {{
         color: #1A73E8;
         background-color: #F1F3F4;
+        border-radius: 8px;
     }}
 
-    /* BOUTON CONTEXTE (Rouge/Actif) */
+    /* --- BOUTON CONTEXTE (Rouge/Actif) --- */
     .context-btn button {{
         color: #D93025 !important;
         font-weight: bold !important;
@@ -87,33 +89,36 @@ st.markdown(f"""
         background-color: #FEF7F6 !important;
     }}
 
-    /* SIDEBAR */
+    /* --- SIDEBAR --- */
     [data-testid="stSidebar"] {{
         background-color: #F8F9FA;
         border-right: 1px solid #E0E0E0;
     }}
 
-    /* CHAT */
+    /* --- CHAT --- */
     [data-testid="stChatMessage"] {{
         padding: 1rem;
         border-radius: 12px;
         margin-bottom: 0.5rem;
     }}
+    /* Assistant */
     [data-testid="stChatMessage"][data-testid="assistant"] {{
         background-color: #FFFFFF;
         border: 1px solid #E0E0E0;
     }}
+    /* Élève */
     [data-testid="stChatMessage"][data-testid="user"] {{
         background-color: #E3F2FD;
         border: none;
     }}
+    /* Avatars */
     [data-testid="stChatMessageAvatar"] img {{
         border-radius: 50%;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         object-fit: cover;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }}
 
-    /* FOOTER & INPUT */
+    /* --- FOOTER FIXE --- */
     .fixed-footer {{
         position: fixed;
         left: 0;
@@ -125,8 +130,49 @@ st.markdown(f"""
         padding: 6px;
         font-size: 11px;
         z-index: 99999;
+        box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
     }}
-    [data-testid="stBottom"] {{ bottom: 30px !important; padding-bottom: 10px; }}
+
+    /* --- OPTIMISATION MOBILE (MEDIA QUERIES) --- */
+    @media only screen and (max-width: 768px) {{
+        /* Réduire la taille du titre sur mobile */
+        .header-title {{
+            font-size: 18px !important;
+        }}
+        .header-subtitle {{
+            font-size: 10px !important;
+            display: none; /* On cache le sous-titre sur très petit écran */
+        }}
+        
+        /* Ajuster les marges du chat */
+        .block-container {{
+            padding-left: 0.5rem !important;
+            padding-right: 0.5rem !important;
+        }}
+        
+        /* Remonter la zone de saisie pour le clavier virtuel */
+        [data-testid="stBottom"] {{
+            bottom: 40px !important; 
+        }}
+        
+        /* Réduire la taille des avatars sur mobile */
+        [data-testid="stChatMessageAvatar"] {{
+            width: 30px !important;
+            height: 30px !important;
+        }}
+        
+        /* Footer plus discret sur mobile */
+        .fixed-footer {{
+            font-size: 9px;
+            padding: 4px;
+        }}
+    }}
+    
+    /* Sur PC, on garde de l'espace pour la saisie */
+    @media only screen and (min-width: 769px) {{
+        [data-testid="stBottom"] {{ bottom: 35px !important; }}
+    }}
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -179,10 +225,7 @@ def log_interaction(student, role, content):
         "User": student, "Role": role, "Msg": content[:50]
     })
 
-# --- 7. DONNÉES MÉTIER RICHES ---
-# Structure : "Nom": {"competence": "...", "doc": { ... }}
-# Si "doc" est présent, un bouton "Fiche de Poste" apparaîtra.
-
+# --- 7. DONNÉES MÉTIER ---
 DB_PREMIERE = {
     "RESSOURCES HUMAINES": {
         "Recrutement": {
@@ -237,17 +280,14 @@ INITIAL_MESSAGE = """
 👋 **Bonjour.**
 
 Bienvenue à l'Agence **Pro'AGOrA**.
-Veuillez sélectionner votre **Mission** à gauche.
+Veuillez sélectionner votre **Mission** à gauche (Menu >).
 """
 
 if not st.session_state.messages:
     st.session_state.messages.append({"role": "assistant", "content": INITIAL_MESSAGE})
 
 def lancer_mission():
-    # Récupération des données
     data = DB_PREMIERE[st.session_state.theme][st.session_state.dossier]
-    
-    # Gestion de la compatibilité (si ancienne structure sans dict)
     if isinstance(data, str):
         competence = data
         st.session_state.current_context_doc = None
@@ -257,7 +297,6 @@ def lancer_mission():
 
     st.session_state.messages = []
     
-    # Construction du Prompt de démarrage pour l'IA
     contexte_ia = ""
     if st.session_state.current_context_doc:
         doc = st.session_state.current_context_doc
@@ -302,7 +341,7 @@ with st.sidebar:
     st.session_state.theme = st.selectbox("Thème", list(DB_PREMIERE.keys()))
     st.session_state.dossier = st.selectbox("Dossier", list(DB_PREMIERE[st.session_state.theme].keys()))
     
-    if st.button("LANCER LA MISSION", type="primary"):
+    if st.button("LANCER LA MISSION", type="primary", use_container_width=True):
         if student_name:
             lancer_mission()
             st.rerun()
@@ -316,33 +355,34 @@ with st.sidebar:
         
     uploaded_file = st.file_uploader("Rendre un travail (.docx)", type=['docx'])
     if uploaded_file and student_name:
-        if st.button("Envoyer à la correction"):
+        if st.button("Envoyer à la correction", use_container_width=True):
             txt = extract_text_from_docx(uploaded_file)
             st.session_state.messages.append({"role": "user", "content": f"PROPOSITION : {txt}"})
             add_notification(f"Fichier envoyé : {uploaded_file.name}")
             st.rerun()
     
     st.markdown("---")
-    if st.button("🗑️ Reset"):
+    if st.button("🗑️ Reset", use_container_width=True):
         st.session_state.messages = [{"role": "assistant", "content": INITIAL_MESSAGE}]
         st.session_state.current_context_doc = None
         st.rerun()
 
-# --- HEADER FONCTIONNEL ---
-c1, c2, c3, c4, c5 = st.columns([3, 1, 1, 1, 1]) # Ajout d'une colonne pour le bouton Fiche
+# --- HEADER FONCTIONNEL (Layout Responsive) ---
+# Utilisation de columns avec des ratios adaptés
+c1, c2, c3, c4, c5 = st.columns([3, 1, 1, 1, 1])
 
 with c1:
     logo_html = ""
     if os.path.exists(LOGO_AGORA):
         b64 = img_to_base64(LOGO_AGORA)
+        # Logo un peu plus petit sur mobile grâce au CSS responsive, ici taille fixe pour Desktop
         logo_html = f'<img src="data:image/png;base64,{b64}" style="height:45px; vertical-align:middle; margin-right:10px;">'
-    st.markdown(f"""<div style="display:flex; align-items:center;">{logo_html}<div><div style="font-size:24px; font-weight:bold; color:#202124; line-height:1.2;">Agence Pro'AGOrA</div><div style="font-size:12px; color:#5F6368;">Superviseur IA v1.7</div></div></div>""", unsafe_allow_html=True)
+    st.markdown(f"""<div style="display:flex; align-items:center; white-space:nowrap; overflow:hidden;">{logo_html}<div><div class="header-title" style="font-weight:bold; color:#202124;">Agence Pro'AGOrA</div><div class="header-subtitle" style="color:#5F6368;">Superviseur IA v1.8</div></div></div>""", unsafe_allow_html=True)
 
-# BOUTON CONTEXTE MÉTIER (S'affiche seulement si une fiche existe)
+# Boutons (Utilisation de use_container_width pour remplir la colonne sur mobile)
 with c2:
     if st.session_state.get("current_context_doc"):
         doc = st.session_state.current_context_doc
-        # On utilise un container pour le style "Bouton Rouge/Important"
         with st.popover(f"📄 {doc['type']}", use_container_width=True):
             st.markdown(f"### {doc['titre']}")
             st.info(doc.get('contexte', ''))
@@ -354,23 +394,32 @@ with c2:
             if 'lien_url' in doc:
                 st.link_button(doc.get('lien_titre', 'En savoir plus'), doc['lien_url'])
 
-# BOUTON AIDE
 with c3:
+    with st.popover("ℹ️ Métiers", use_container_width=True):
+        st.markdown("### 📋 Fiches Métiers AGOrA")
+        st.info("Tu es perdu ? Voici les rôles principaux :")
+        st.markdown("""
+        **👩‍💼 Assistant(e) de Gestion**
+        *Gère l'administratif, l'accueil et les dossiers courants.*
+        **📦 Gestionnaire de Stocks**
+        *Suit les entrées/sorties de marchandises.*
+        **🛒 Assistant(e) Commercial(e)**
+        *Fait les devis et suit les commandes.*
+        **👥 Assistant(e) RH**
+        *Prépare les contrats et suit les congés.*
+        """)
+        st.markdown("---")
+        st.link_button("🔗 Voir toutes les fiches (ONISEP)", "https://www.onisep.fr/metiers")
+
+with c4:
     with st.popover("❓ Aide", use_container_width=True):
         st.markdown("### 📚 Ressources")
-        st.link_button("📂 Accéder aux Cours (ENT)", "https://cas.ent.auvergnerhonealpes.fr/login?service=https%3A%2F%2Fglieres.ent.auvergnerhonealpes.fr%2Fsg.do%3FPROC%3DPAGE_ACCUEIL")
-        st.link_button("🔗 Fiches Métiers (ONISEP)", "https://www.onisep.fr/metiers")
+        st.link_button("📂 Cours (ENT)", "https://cas.ent.auvergnerhonealpes.fr/login?service=https%3A%2F%2Fglieres.ent.auvergnerhonealpes.fr%2Fsg.do%3FPROC%3DPAGE_ACCUEIL")
+        st.caption("Contactez le prof en cas de souci.")
 
-# BOUTON NOTIF
-with c4:
-    with st.popover("🔔 Notif.", use_container_width=True):
-        st.caption("Historique :")
-        for note in st.session_state.notifications[:5]:
-            st.text(f"• {note}")
-
-# BOUTON PROFIL
 with c5:
-    st.button(user_label, disabled=True, use_container_width=True)
+    # On affiche juste une icône sur mobile si le nom est trop long
+    st.button(f"👤", help=user_label, disabled=True, use_container_width=True)
 
 st.markdown("<hr style='margin: 0 0 20px 0;'>", unsafe_allow_html=True)
 
@@ -394,7 +443,7 @@ for i, msg in enumerate(st.session_state.messages):
 st.markdown("<br><br>", unsafe_allow_html=True)
 
 # --- FOOTER & INPUT ---
-st.markdown('<div class="fixed-footer">Agence Pro\'AGOrA - Environnement Pédagogique Sécurisé - Données Fictives Uniquement</div>', unsafe_allow_html=True)
+st.markdown('<div class="fixed-footer">Agence Pro\'AGOrA - Outil Pédagogique Sécurisé - Données Fictives Uniquement</div>', unsafe_allow_html=True)
 
 if user_input := st.chat_input("Votre réponse..."):
     if not student_name:
@@ -408,7 +457,6 @@ if st.session_state.messages[-1]["role"] == "user":
         with st.spinner("Analyse..."):
             sys = SYSTEM_PROMPT
             if st.session_state.get("mode_simple"): sys += " UTILISE DES MOTS SIMPLES."
-            # Injection du contexte métier si existant
             if st.session_state.get("current_context_doc"):
                 sys += f"\nCONTEXTE MISSION : Tu recrutes pour le poste de {st.session_state.current_context_doc['titre']}."
 
