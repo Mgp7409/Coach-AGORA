@@ -64,10 +64,10 @@ def update_xp(amount):
     else:
         st.toast(f"+{amount} XP", icon="⭐")
 
-# --- 3. LISTES DE DONNÉES (POUR PGI) ---
-# On garde des listes pour varier les noms, mais les scénarios seront fixes sur la structure.
+# --- 3. VARIABLES DE CONTEXTE ---
+VILLES_FRANCE = ["Lyon", "Bordeaux", "Lille", "Nantes", "Strasbourg", "Toulouse", "Marseille", "Nice", "Rennes", "Dijon"]
+TYPES_ORGANISATIONS = ["Mairie", "Clinique", "Garage", "Association", "PME BTP", "Agence Immo", "Supermarché", "Cabinet Comptable"]
 NOMS = ["Martin", "Bernard", "Thomas", "Petit", "Robert", "Richard", "Durand", "Dubois", "Moreau", "Laurent"]
-VILLES = ["Lyon", "Bordeaux", "Lille", "Nantes", "Toulouse"]
 
 # --- 4. OUTILS IMAGE ---
 def img_to_base64(img_path):
@@ -93,7 +93,7 @@ st.markdown(f"""
     [data-testid="stHeader"] {{background-color: rgba(255, 255, 255, 0.95);}}
     .reportview-container .main .block-container {{padding-top: 1rem; max-width: 100%;}}
     
-    /* PGI SIMULATEUR STYLE */
+    /* PGI STYLE */
     .pgi-container {{
         border: 1px solid #dfe1e5;
         border-radius: 8px;
@@ -156,7 +156,7 @@ def query_groq_with_rotation(messages):
             for model in models:
                 try:
                     chat = client.chat.completions.create(
-                        messages=messages, model=model, temperature=0.3, max_tokens=1024 # Température basse pour rigueur
+                        messages=messages, model=model, temperature=0.3, max_tokens=1024
                     )
                     return chat.choices[0].message.content, model
                 except: continue
@@ -181,76 +181,164 @@ def add_notification(msg):
     ts = datetime.now().strftime("%H:%M")
     st.session_state.notifications.insert(0, f"{ts} - {msg}")
 
-# --- 8. CONFIGURATION DES SCÉNARIOS (TYPE LIVRE/BAC) ---
-# Chaque scénario a un "Problème" spécifique caché dans les données PGI
-
-SCENARIOS = {
-    "RELATIONS PARTENAIRES": {
-        "Traitement de Commande": {
-            "contexte": "Vous êtes assistant(e) chez 'BuroPlus'. Un client fidèle, M. Martin, a passé commande mais un article est en rupture.",
-            "consigne_1": "Consultez le PGI ci-dessous pour vérifier l'état des stocks de la commande de M. Martin. Identifiez le problème.",
-            "pgi_mode": "commande_problematique",
-            "procedure": "1. Vérification Stock -> 2. Identification Rupture -> 3. Mail d'information client (Proposition équivalent ou délai)."
+# --- 8. DONNÉES OFFICIELLES DU LIVRE (SOMMAIRE) ---
+DB_PREMIERE = {
+    "1. RELATIONS CLIENTS & USAGERS": {
+        "D1. Traitement des demandes": {
+            "competence": "Accueillir, identifier le besoin, orienter, répondre.",
+            "procedure": "1. Qualification de la demande -> 2. Recherche d'infos (PGI) -> 3. Réponse (Mail/Tel).",
+            "doc": None
         },
-        "Relance Facture": {
-            "contexte": "Vous travaillez au service comptable de 'Garage Auto'. Plusieurs factures sont en retard.",
-            "consigne_1": "Repérez dans le PGI le client qui a la facture impayée la plus ancienne. Quel est le montant et la date ?",
-            "pgi_mode": "factures_retard",
-            "procedure": "1. Identification Impayé -> 2. Calcul du retard -> 3. Rédaction Mail de relance niveau 1 (Courtois)."
+        "D2. Suivi des opérations": {
+            "competence": "Suivi de dossier, mise à jour PGI.",
+            "procedure": "1. Consultation dossier -> 2. Vérification avancement -> 3. Information client.",
+            "doc": None
+        },
+        "D3. Traitement des réclamations": {
+            "competence": "Recevoir la plainte, analyser, proposer une solution.",
+            "procedure": "1. Analyse du motif -> 2. Vérification validité -> 3. Proposition commerciale/technique.",
+            "doc": {"type": "Mail Réclamation", "titre": "Client Mécontent", "contexte": "Livraison incomplète.", "missions": ["Répondre au mail"]}
+        },
+        "D4. Suivi de la satisfaction": {
+            "competence": "Enquêtes, statistiques, fidélisation.",
+            "procedure": "1. Collecte avis -> 2. Analyse résultats (Tableau) -> 3. Actions correctives.",
+            "doc": None
         }
     },
-    "RESSOURCES HUMAINES": {
-        "Sélection Candidat": {
-            "contexte": "La Mairie recrute un agent d'accueil. Profil exigé : Bac Pro + Anglais. 4 candidats ont postulé.",
-            "consigne_1": "Analysez le tableau des candidats dans le PGI. Lequel correspond exactement aux critères (Bac Pro + Anglais) ? Justifiez.",
-            "pgi_mode": "candidats_tri",
-            "procedure": "1. Analyse des critères -> 2. Sélection du bon profil -> 3. Mail de convocation."
+    "2. ORGANISATION & PRODUCTION": {
+        "D5. Suivi des approvisionnements": {
+            "competence": "Stocks, commandes fournisseurs, réception.",
+            "procedure": "1. Inventaire -> 2. Identification besoins -> 3. Bon de commande fournisseur.",
+            "doc": None
         },
-        "Organisation Déplacement": {
-            "contexte": "M. Le Directeur doit aller à Paris le 15 juin pour une réunion à 14h00. Budget max : 100€.",
-            "consigne_1": "Consultez les options de transport dans le PGI. Quel train permet d'arriver à temps tout en respectant le budget ?",
-            "pgi_mode": "transport_options",
-            "procedure": "1. Analyse contraintes (Heure/Budget) -> 2. Choix solution -> 3. Rédaction Note de synthèse."
+        "D6. Suivi des commandes": {
+            "competence": "Traitement commande client, bon de livraison.",
+            "procedure": "1. Réception BC -> 2. Vérification stock -> 3. Préparation BL.",
+            "doc": None
+        },
+        "D7. Suivi de la facturation": {
+            "competence": "Établir facture, TVA, avoir.",
+            "procedure": "1. Reprise du BL -> 2. Création Facture (Mentions obligatoires) -> 3. Envoi.",
+            "doc": None
+        },
+        "D8. Suivi des règlements": {
+            "competence": "Suivi paiements, relances impayés.",
+            "procedure": "1. Pointage banque -> 2. Identification retards -> 3. Relance (Niveau 1, 2, 3).",
+            "doc": None
+        }
+    },
+    "3. ADMINISTRATION DU PERSONNEL": {
+        "D9. Suivi de la carrière": {
+            "competence": "Recrutement, formation, évaluation.",
+            "procedure": "1. Fiche de poste -> 2. Annonce -> 3. Tri CV -> 4. Convocation.",
+            "doc": {"type": "Besoin RH", "titre": "Recrutement Assistant", "contexte": "Départ retraite.", "missions": ["Créer l'annonce"]}
+        },
+        "D10. Suivi de l'activité": {
+            "competence": "Temps de travail, congés, absences.",
+            "procedure": "1. Réception demande -> 2. Vérification solde -> 3. Validation/Refus.",
+            "doc": None
+        },
+        "D11. Participation activité sociale": {
+            "competence": "Organiser événements, communication interne.",
+            "procedure": "1. Budget -> 2. Choix prestataire -> 3. Note de service.",
+            "doc": None
         }
     }
 }
 
-# --- 9. GÉNÉRATEUR DE DONNÉES PGI (DONNÉES "PREUVES") ---
-def get_pgi_data(mode):
-    """Génère des données qui contiennent LA réponse au problème posé"""
+# --- 9. GÉNÉRATEUR PGI CORRIGÉ ---
+def get_pgi_data(theme, dossier):
+    """Génère des données spécifiques au dossier choisi"""
+    rows = []
     
-    if mode == "commande_problematique":
-        return pd.DataFrame([
-            {"Réf": "STY-001", "Article": "Stylo Bille Bleu", "Qté Commandée": 50, "Stock Réel": 200, "Statut": "OK"},
-            {"Réf": "PAP-A4", "Article": "Papier A4 80g", "Qté Commandée": 10, "Stock Réel": 100, "Statut": "OK"},
-            {"Réf": "IMP-L", "Article": "Imprimante Laser", "Qté Commandée": 1, "Stock Réel": 0, "Statut": "RUPTURE"},
-        ])
-    
-    elif mode == "factures_retard":
-        return pd.DataFrame([
-            {"Client": "M. Dupont", "Facture": "F-202", "Date": "01/11/2024", "Montant": "150 €", "État": "Réglée"},
-            {"Client": "Sarl Durand", "Facture": "F-203", "Date": "15/10/2024", "Montant": "1200 €", "État": "En attente"},
-            {"Client": "Assoc. Sport", "Facture": "F-199", "Date": "01/09/2024", "Montant": "450 €", "État": "NON PAYÉE (Retard critique)"},
-        ])
-        
-    elif mode == "candidats_tri":
-        return pd.DataFrame([
-            {"Nom": "M. ALAMI", "Diplôme": "CAP Vente", "Langue": "Anglais A2", "Expérience": "5 ans"},
-            {"Nom": "Mme BERNARD", "Diplôme": "Bac Pro AGOrA", "Langue": "Anglais B2 (Courant)", "Expérience": "Débutant"},
-            {"Nom": "M. PETIT", "Diplôme": "Bac Général", "Langue": "Espagnol", "Expérience": "Aucune"},
-            {"Nom": "Mme ROUX", "Diplôme": "BTS SAM", "Langue": "Anglais A1", "Expérience": "10 ans (Trop qualifiée)"},
-        ])
-        
-    elif mode == "transport_options":
-        return pd.DataFrame([
-            {"Train": "TGV 6602", "Départ": "08h00", "Arrivée": "10h00", "Prix": "120 €", "Verdict": "Trop cher"},
-            {"Train": "TGV 6614", "Départ": "10h00", "Arrivée": "12h00", "Prix": "90 €", "Verdict": "Idéal"},
-            {"Train": "TER 8852", "Départ": "13h00", "Arrivée": "17h00", "Prix": "40 €", "Verdict": "Trop tard (Réunion 14h)"},
-        ])
-        
-    return pd.DataFrame({"Info": ["Aucune donnée spécifique nécessaire"]})
+    # THEME 1 : RELATIONS CLIENTS
+    if "RELATIONS CLIENTS" in theme:
+        if "réclamations" in dossier:
+            # Tableau des tickets SAV
+            for i in range(5):
+                rows.append({
+                    "N° Ticket": f"SAV-{random.randint(100,999)}",
+                    "Client": f"{random.choice(NOMS)} {random.choice(['SA', 'SARL'])}",
+                    "Motif": random.choice(["Retard", "Casse", "Erreur Réf", "Panne"]),
+                    "Statut": random.choice(["Nouveau", "En cours", "Clôturé"])
+                })
+        elif "satisfaction" in dossier:
+            # Résultats enquête
+            for i in range(5):
+                rows.append({
+                    "Critère": random.choice(["Accueil", "Délai", "Qualité Produit", "SAV"]),
+                    "Note Moyenne": f"{random.randint(2,5)}/5",
+                    "Commentaire": random.choice(["Très bien", "À améliorer", "Parfait", "Déçu"])
+                })
+        else: # Demandes / Opérations
+            for i in range(6):
+                rows.append({
+                    "Client": f"Client {random.randint(1,50)}",
+                    "Dernier Contact": "26/11/2024",
+                    "Objet": random.choice(["Devis", "Info Produit", "RDV"]),
+                    "État": "À traiter"
+                })
 
-# --- 10. IA (PROMPT TYPE EXAMEN) ---
+    # THEME 2 : ORGANISATION PRODUCTION
+    elif "ORGANISATION" in theme:
+        if "approvisionnements" in dossier:
+            # Stocks et Fournisseurs
+            for _ in range(6):
+                rows.append({
+                    "Réf": f"ART-{random.randint(100,999)}",
+                    "Désignation": random.choice(["Papier", "Encre", "Classeurs", "PC"]),
+                    "Stock Réel": random.randint(0, 20),
+                    "Stock Alerte": 5,
+                    "Fournisseur": random.choice(["BureauVallée", "OfficeDepot", "Grossiste"])
+                })
+        elif "règlements" in dossier:
+            # Impayés
+            for _ in range(5):
+                rows.append({
+                    "Facture": f"F-{2024000+random.randint(1,99)}",
+                    "Client": random.choice(NOMS),
+                    "Montant": f"{random.randint(100, 3000)} €",
+                    "Échéance": "15/10/2024 (Dépassée)",
+                    "Relance": "À faire"
+                })
+        else: # Commandes / Facturation
+            for i in range(1, 7):
+                rows.append({
+                    "Commande": f"BC-{100+i}",
+                    "Client": random.choice(NOMS),
+                    "Montant HT": random.randint(500, 5000),
+                    "Statut": random.choice(["À livrer", "Livré non facturé", "Facturé"])
+                })
+
+    # THEME 3 : RH
+    elif "ADMINISTRATION" in theme:
+        if "carrière" in dossier:
+            # Candidats
+            for _ in range(5):
+                rows.append({
+                    "Candidat": f"{random.choice(NOMS)} {random.choice(['A.', 'M.', 'L.'])}",
+                    "Diplôme": random.choice(["Bac Pro", "BTS", "Autodidacte"]),
+                    "Expérience": f"{random.randint(0, 10)} ans",
+                    "Avis": "À étudier"
+                })
+        elif "activité" in dossier:
+            # Congés
+            for _ in range(6):
+                rows.append({
+                    "Salarié": random.choice(NOMS),
+                    "Type": random.choice(["CP", "RTT", "Maladie"]),
+                    "Dates": "Du 10/12 au 15/12",
+                    "Solde CP": f"{random.randint(0, 25)} jours"
+                })
+        else: # Social
+            rows.append({"Evénement": "Arbre de Noël", "Budget": "2000 €", "Statut": "Prestataire à trouver"})
+
+    else:
+        rows.append({"Info": "Données génériques"})
+
+    return pd.DataFrame(rows)
+
+# --- 10. IA (PROMPT) ---
 SYSTEM_PROMPT = """
 RÔLE : Tu es Tuteur et Évaluateur pour le Bac Pro AGOrA.
 TON : Professionnel, directif.
@@ -281,29 +369,30 @@ def lancer_mission(prenom):
     theme = st.session_state.theme
     dossier = st.session_state.dossier
     
-    # Chargement du scénario
-    scenario = SCENARIOS.get(theme, {}).get(dossier, None)
-    
-    if not scenario:
-        st.error("Scénario non trouvé.")
-        return
+    # 1. Tirage contexte aléatoire
+    lieu = random.choice(TYPES_ORGANISATIONS)
+    ville = random.choice(VILLES_FRANCE)
 
-    # Chargement PGI
-    st.session_state.pgi_data = get_pgi_data(scenario["pgi_mode"])
+    # 2. Chargement données dossier
+    data = DB_PREMIERE[theme][dossier]
+    competence = data["competence"]
+    procedure = data.get("procedure", "Standard")
     
+    # 3. Génération PGI
+    st.session_state.pgi_data = get_pgi_data(theme, dossier)
     st.session_state.messages = []
-    st.session_state.current_context_doc = scenario # On garde tout le scénario en mémoire
+    st.session_state.current_context_doc = data.get("doc", None)
 
     prompt_init = f"""
     DÉMARRAGE EXERCICE.
     ÉLÈVE : {prenom}
-    CONTEXTE ENTREPRISE : {scenario['contexte']}
-    PROCÉDURE À SUIVRE : {scenario['procedure']}
+    CONTEXTE : {lieu} à {ville}.
+    MISSION : {dossier}
+    PROCÉDURE : {procedure}
     
     CONSIGNE :
-    1. Présente le contexte à l'élève.
-    2. Affiche la CONSIGNE N°1 : "{scenario['consigne_1']}"
-    3. Attends son analyse.
+    1. Accueille l'élève en présentant l'entreprise.
+    2. Donne la 1ère tâche liée au PGI affiché (ex: "Analyse le tableau et dis-moi...").
     """
     
     msgs = [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt_init}]
@@ -351,12 +440,13 @@ with st.sidebar:
     
     st.subheader("📂 Dossiers Professionnels")
     
-    # Sélection dynamique basée sur les nouveaux scénarios SCENARIOS
-    themes_dispo = list(SCENARIOS.keys())
-    st.session_state.theme = st.selectbox("Thème", themes_dispo)
+    # Sélection Thème
+    theme_keys = list(DB_PREMIERE.keys())
+    st.session_state.theme = st.selectbox("Thème", theme_keys)
     
-    dossiers_dispo = list(SCENARIOS[st.session_state.theme].keys())
-    st.session_state.dossier = st.selectbox("Mission", dossiers_dispo)
+    # Sélection Dossier (dynamique)
+    dossier_keys = list(DB_PREMIERE[st.session_state.theme].keys())
+    st.session_state.dossier = st.selectbox("Mission", dossier_keys)
     
     if st.button("LANCER", type="primary"):
         if student_name:
@@ -373,7 +463,7 @@ with st.sidebar:
     st.markdown("---")
     uploaded_file = st.file_uploader("Rendre un travail (Word)", type=['docx'])
     if uploaded_file and student_name:
-        if st.button("Envoyer à la correction"):
+        if st.button("Envoyer"):
             txt = extract_text_from_docx(uploaded_file)
             st.session_state.messages.append({"role": "user", "content": f"PROPOSITION ÉLÈVE : {txt}"})
             update_xp(20)
@@ -408,7 +498,7 @@ with c1:
     if os.path.exists(LOGO_AGORA):
         b64 = img_to_base64(LOGO_AGORA)
         logo_html = f'<img src="data:image/png;base64,{b64}" style="height:40px; margin-right:10px;">'
-    st.markdown(f"""<div style="display:flex; align-items:center;">{logo_html}<div><div style="font-size:22px; font-weight:bold; color:#202124;">Agence Pro'AGOrA</div><div style="font-size:12px; color:#5F6368;">v4.0 (Conforme Référentiel)</div></div></div>""", unsafe_allow_html=True)
+    st.markdown(f"""<div style="display:flex; align-items:center;">{logo_html}<div><div style="font-size:22px; font-weight:bold; color:#202124;">Agence Pro'AGOrA</div><div style="font-size:12px; color:#5F6368;">v4.1 (Conforme Livre)</div></div></div>""", unsafe_allow_html=True)
 
 with c2:
     with st.popover("ℹ️ Aide Métier"):
