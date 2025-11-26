@@ -31,23 +31,48 @@ st.set_page_config(
     initial_sidebar_state="auto"
 )
 
-# --- 2. GESTION ÉTAT ---
+# --- 2. GESTION ÉTAT (XP & MESSAGES) ---
 if "messages" not in st.session_state: st.session_state.messages = []
 if "logs" not in st.session_state: st.session_state.logs = []
 if "notifications" not in st.session_state: st.session_state.notifications = ["Bienvenue."]
 if "current_context_doc" not in st.session_state: st.session_state.current_context_doc = None
-# Variables pour le menu
-if "selected_theme" not in st.session_state: st.session_state.selected_theme = None
-if "selected_dossier" not in st.session_state: st.session_state.selected_dossier = None
 
-# --- 3. OUTILS IMAGE ---
+# GAMIFICATION (XP)
+if "xp" not in st.session_state: st.session_state.xp = 0
+if "grade" not in st.session_state: st.session_state.grade = "Stagiaire"
+
+# --- 3. OUTILS & VARIABLES ---
 def img_to_base64(img_path):
     if os.path.exists(img_path):
         with open(img_path, "rb") as f:
             return base64.b64encode(f.read()).decode()
     return ""
 
-# --- 4. STYLE & CSS (MOBILE FIRST) ---
+# Listes pour la diversification
+TYPES_ORGA = ["Mairie", "Hôpital", "Association Sportive", "Garage Automobile", "Cabinet d'Architecte", "Entreprise de BTP", "Supermarché", "Office de Tourisme"]
+VILLES = ["Lyon", "Bordeaux", "Lille", "Nantes", "Strasbourg", "Toulouse", "Marseille", "Petit Village"]
+
+# Grades
+GRADES = {
+    0: "👶 Stagiaire",
+    100: "👦 Assistant(e) Junior",
+    300: "👨‍💼 Assistant(e) Confirmé(e)",
+    600: "👩‍💻 Responsable de Pôle",
+    1000: "👑 Directeur(trice)"
+}
+
+def update_grade():
+    for score, titre in GRADES.items():
+        if st.session_state.xp >= score:
+            st.session_state.grade = titre
+
+def ajouter_xp(points):
+    st.session_state.xp += points
+    update_grade()
+    st.toast(f"Bravo ! +{points} XP", icon="⭐")
+    st.balloons()
+
+# --- 4. STYLE & CSS ---
 is_dys = st.session_state.get("mode_dys", False)
 font_family = "'Verdana', sans-serif" if is_dys else "'Segoe UI', 'Roboto', Helvetica, Arial, sans-serif"
 font_size = "18px" if is_dys else "16px"
@@ -62,48 +87,24 @@ st.markdown(f"""
         background-color: #FFFFFF;
     }}
 
-    /* --- CORRECTION HEADER MOBILE --- */
-    header {{
-        background-color: transparent !important;
-    }}
-    [data-testid="stHeader"] {{
-        background-color: rgba(255, 255, 255, 0.95);
-    }}
+    /* HEADER CLEAN */
+    header {{background-color: transparent !important;}} 
+    [data-testid="stHeader"] {{background-color: rgba(255, 255, 255, 0.95);}}
     
-    /* La flèche du menu (Sidebar toggle) */
-    [data-testid="stSidebarCollapsedControl"] {{
-        color: #1A73E8 !important;
-        font-weight: bold;
+    .reportview-container .main .block-container {{
+        padding-top: 1rem;
+        max-width: 100%;
     }}
 
-    /* NAVBAR PERSONNALISÉE */
+    /* NAVBAR */
     .navbar-container {{
         display: flex;
         align-items: center;
         background-color: white;
-        padding: 10px 5px;
+        padding: 10px 20px;
         border-bottom: 1px solid #E0E0E0;
         margin-bottom: 10px;
-        min-height: 60px;
-    }}
-
-    /* BOUTONS NAVBAR */
-    div[data-testid="stHorizontalBlock"] button {{
-        background-color: transparent;
-        border: none;
-        color: #5F6368;
-        font-weight: 500;
-        padding: 0 5px;
-    }}
-    div[data-testid="stHorizontalBlock"] button:hover {{
-        color: #1A73E8;
-        background-color: #F1F3F4;
-    }}
-
-    /* SIDEBAR */
-    [data-testid="stSidebar"] {{
-        background-color: #F8F9FA;
-        border-right: 1px solid #E0E0E0;
+        height: 80px;
     }}
 
     /* BOUTON PRIMAIRE */
@@ -115,30 +116,26 @@ st.markdown(f"""
         width: 100%;
     }}
 
-    /* CHAT */
+    /* CHAT OPTIMISÉ */
     [data-testid="stChatMessage"] {{
         padding: 1rem;
         border-radius: 12px;
         margin-bottom: 0.5rem;
     }}
-    /* Assistant */
     [data-testid="stChatMessage"][data-testid="assistant"] {{
         background-color: #FFFFFF;
         border: 1px solid #E0E0E0;
     }}
-    /* Élève */
     [data-testid="stChatMessage"][data-testid="user"] {{
         background-color: #E3F2FD;
         border: none;
     }}
-    /* Avatars */
     [data-testid="stChatMessageAvatar"] img {{
         border-radius: 50%;
         object-fit: cover;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }}
 
-    /* --- FOOTER FIXE --- */
+    /* FOOTER */
     .fixed-footer {{
         position: fixed;
         left: 0;
@@ -150,20 +147,8 @@ st.markdown(f"""
         padding: 6px;
         font-size: 11px;
         z-index: 99999;
-        box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
     }}
-    [data-testid="stBottom"] {{ bottom: 40px !important; padding-bottom: 10px; }}
-    
-    /* CARTE D'ACCUEIL (MOBILE) */
-    .welcome-card {{
-        background-color: #F8F9FA;
-        border-radius: 15px;
-        padding: 20px;
-        text-align: center;
-        border: 1px solid #E0E0E0;
-        margin-bottom: 20px;
-    }}
-
+    [data-testid="stBottom"] {{ bottom: 30px !important; padding-bottom: 10px; }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -224,7 +209,7 @@ DB_PREMIERE = {
             "doc": {
                 "type": "Fiche de Poste",
                 "titre": "Assistant(e) Commercial(e) (H/F)",
-                "contexte": "La PME 'EcoBat' (Bâtiment écologique, 45 salariés) cherche à renforcer son équipe commerciale.",
+                "contexte": "PME en pleine croissance.",
                 "missions": ["Accueil clients.", "Suivi des devis.", "Relance impayés."],
                 "profil": "Bac Pro AGOrA, organisé(e), bon relationnel.",
                 "lien_titre": "Fiche métier (ONISEP)",
@@ -246,16 +231,23 @@ DB_PREMIERE = {
     }
 }
 
-# --- 8. IA ---
+# --- 8. IA (PROMPT STRUCTURÉ ET SIMPLIFIÉ) ---
 SYSTEM_PROMPT = """
 RÔLE : Tu es le Superviseur Virtuel de l'Agence Pro'AGOrA.
-TON : Professionnel, bienveillant mais exigeant.
-MISSION : Guider l'élève (Bac Pro) sans jamais faire le travail à sa place.
+TON : Professionnel, encourageant et clair.
+MISSION : Guider l'élève (Bac Pro) pas à pas.
 
-RÈGLES CLÉS :
-1. SOURCES : Ajoute "📎 Source : [Nom]" quand tu donnes une info.
-2. PÉDAGOGIE : Si l'élève bloque, donne un indice.
-3. CONTEXTE : Utilise les infos de la mission (Fiche poste, Entreprise).
+RÈGLES D'OR :
+1. ÉTAPE PAR ÉTAPE : Ne donne JAMAIS toutes les instructions en même temps. Une seule tâche à la fois.
+2. SIMPLICITÉ : Utilise des phrases courtes. Fais des listes à puces.
+3. SOURCES : Ajoute "📎 Source : [Nom]" si tu donnes une info technique.
+4. AIDE : Si l'élève est bloqué, donne un exemple concret (mais fictif).
+
+STRUCTURE DE TA PREMIÈRE RÉPONSE :
+1. Salue l'élève.
+2. Présente le Contexte (Lieu + Ville).
+3. Donne la Mission globale en 1 phrase.
+4. Donne la PREMIÈRE petite tâche à faire.
 
 SÉCURITÉ : Données réelles -> STOP.
 """
@@ -264,15 +256,19 @@ INITIAL_MESSAGE = """
 👋 **Bonjour.**
 
 Bienvenue à l'Agence **Pro'AGOrA**.
-Veuillez lancer votre mission ci-dessous.
+Veuillez sélectionner votre **Mission** à gauche pour commencer.
 """
 
-# --- 9. FONCTIONS DE LANCEMENT ---
-def lancer_mission_centrale(theme, dossier, prenom):
-    st.session_state.selected_theme = theme
-    st.session_state.selected_dossier = dossier
+if not st.session_state.messages:
+    st.session_state.messages.append({"role": "assistant", "content": INITIAL_MESSAGE})
+
+def lancer_mission(prenom):
+    data = DB_PREMIERE[st.session_state.theme][st.session_state.dossier]
     
-    data = DB_PREMIERE[theme][dossier]
+    # Diversification aléatoire
+    lieu = random.choice(TYPES_ORGA)
+    ville = random.choice(VILLES)
+    
     if isinstance(data, str):
         competence = data
         st.session_state.current_context_doc = None
@@ -285,109 +281,104 @@ def lancer_mission_centrale(theme, dossier, prenom):
     contexte_ia = ""
     if st.session_state.current_context_doc:
         doc = st.session_state.current_context_doc
-        contexte_ia = f"DÉTAILS DU CAS : Poste {doc['titre']} - {doc.get('contexte', '')}"
+        contexte_ia = f"CONTEXTE SPÉCIFIQUE : Recrutement pour le poste de {doc['titre']}."
 
     prompt = f"""
-    CONTEXTE : Démarrage mission '{dossier}' par l'élève {prenom}.
-    COMPÉTENCE : {competence}
+    CONTEXTE GÉNÉRAL : L'élève {prenom} est en stage (virtuel) dans une structure de type {lieu} située à {ville}.
+    MISSION CHOISIE : '{st.session_state.dossier}'.
+    COMPÉTENCE VISÉE : {competence}
     {contexte_ia}
-    ACTION : Incarne le responsable. Accueille l'élève, donne le contexte et la 1ère consigne.
+    
+    ACTION :
+    1. Accueille l'élève en lui donnant son cadre de travail ({lieu} à {ville}).
+    2. Explique la mission simplement.
+    3. Donne la PREMIÈRE instruction (très simple) pour commencer.
     """
     
     msgs = [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}]
-    with st.spinner("Initialisation..."):
+    with st.spinner("Génération de la mission..."):
         resp, _ = query_groq_with_rotation(msgs)
         st.session_state.messages.append({"role": "assistant", "content": resp})
-    add_notification(f"Mission lancée : {dossier}")
+    add_notification(f"Mission lancée : {st.session_state.dossier}")
 
-# --- 10. INTERFACE GRAPHIQUE ---
-
-# --- DÉFINITION UTILISATEUR (CORRECTIF) ---
-# On récupère le prénom soit de la sidebar, soit du centre, soit vide
-current_user_name = st.session_state.get("name_sidebar") or st.session_state.get("name_center")
-user_label = f"👤 {current_user_name}" if current_user_name else "👤 Invité"
+# --- 9. INTERFACE ---
 
 LOGO_LYCEE = "logo_lycee.png"
 LOGO_AGORA = "logo_agora.png"
 BOT_AVATAR = LOGO_AGORA if os.path.exists(LOGO_AGORA) else "🤖"
 
-# --- SIDEBAR (Menu Complet) ---
+# --- SIDEBAR ---
 with st.sidebar:
     if os.path.exists(LOGO_LYCEE): st.image(LOGO_LYCEE, width=100)
     else: st.header("Lycée Pro")
     
-    st.info("🔒 **Espace Sécurisé** : Données fictives.")
+    st.markdown("---")
     
-    # Champ Prénom Sidebar
-    sidebar_name = st.text_input("Votre Prénom (Menu)", key="name_sidebar")
+    # GAMIFICATION
+    st.markdown(f"### 🏆 Niveau : {st.session_state.grade}")
+    st.progress(min(st.session_state.xp / 1000, 1.0))
+    st.caption(f"XP Total : {st.session_state.xp} pts")
     
-    st.subheader("📂 Changer de Mission")
-    sb_theme = st.selectbox("Thème", list(DB_PREMIERE.keys()), key="sb_theme")
-    sb_dossier = st.selectbox("Dossier", list(DB_PREMIERE[sb_theme].keys()), key="sb_dossier")
+    st.markdown("---")
     
-    if st.button("RELANCER LA MISSION", type="primary", use_container_width=True):
-        if sidebar_name:
-            lancer_mission_centrale(sb_theme, sb_dossier, sidebar_name)
+    student_name = st.text_input("Prénom", placeholder="Ex: Camille")
+    user_label = f"👤 {student_name}" if student_name else "👤 Invité"
+    
+    st.subheader("📂 Missions")
+    st.session_state.theme = st.selectbox("Thème", list(DB_PREMIERE.keys()))
+    st.session_state.dossier = st.selectbox("Dossier", list(DB_PREMIERE[st.session_state.theme].keys()))
+    
+    col_start, col_xp = st.columns([2, 1])
+    with col_start:
+        if st.button("LANCER", type="primary"):
+            if student_name:
+                lancer_mission(student_name)
+                st.rerun()
+            else:
+                st.warning("Prénom ?")
+    with col_xp:
+        if st.button("VALIDER"):
+            ajouter_xp(50)
             st.rerun()
-        else:
-            st.warning("Prénom requis")
-
+            
     with st.expander("🛠️ Options"):
         st.checkbox("Mode DYS", key="mode_dys")
         st.checkbox("Audio", key="mode_audio")
         st.checkbox("Simplifié", key="mode_simple")
         
-    uploaded_file = st.file_uploader("Rendre un travail", type=['docx'])
-    if uploaded_file and sidebar_name:
+    uploaded_file = st.file_uploader("Rendre un travail (.docx)", type=['docx'])
+    if uploaded_file and student_name:
         if st.button("Envoyer à la correction"):
             txt = extract_text_from_docx(uploaded_file)
             st.session_state.messages.append({"role": "user", "content": f"PROPOSITION : {txt}"})
+            add_notification(f"Fichier envoyé : {uploaded_file.name}")
+            ajouter_xp(20) # XP Bonus pour envoi de fichier
             st.rerun()
     
     st.markdown("---")
-    
-    # --- BOUTON SAUVEGARDE (Réintégré) ---
-    if len(st.session_state.messages) > 1:
-        chat_df = pd.DataFrame(st.session_state.messages)
-        csv_data = chat_df.to_csv(index=False).encode('utf-8')
-        
-        safe_name = sidebar_name if sidebar_name else st.session_state.get("name_center", "anonyme")
-        date_str = datetime.now().strftime("%d%m_%H%M")
-        file_name = f"suivi_agora_{safe_name}_{date_str}.csv"
-        
-        st.download_button(
-            label="💾 Sauvegarder (CSV)",
-            data=csv_data,
-            file_name=file_name,
-            mime="text/csv",
-            use_container_width=True,
-            help="Garder une trace de l'échange"
-        )
-    
-    if st.button("🗑️ Reset", use_container_width=True):
-        st.session_state.messages = []
+    if st.button("🗑️ Reset"):
+        st.session_state.messages = [{"role": "assistant", "content": INITIAL_MESSAGE}]
+        st.session_state.current_context_doc = None
         st.rerun()
 
-# --- HEADER VISUEL ---
+# --- HEADER ---
 c1, c2, c3, c4, c5 = st.columns([3, 1, 1, 1, 1])
+
 with c1:
     logo_html = ""
     if os.path.exists(LOGO_AGORA):
         b64 = img_to_base64(LOGO_AGORA)
-        logo_html = f'<img src="data:image/png;base64,{b64}" style="height:40px; margin-right:10px;">'
-    st.markdown(f"""<div style="display:flex; align-items:center; white-space:nowrap; overflow:hidden;">{logo_html}<div><div class="header-title" style="font-weight:bold; color:#202124;">Agence Pro'AGOrA</div><div class="header-subtitle" style="color:#5F6368;">Superviseur IA v2.0</div></div></div>""", unsafe_allow_html=True)
+        logo_html = f'<img src="data:image/png;base64,{b64}" style="height:45px; vertical-align:middle; margin-right:10px;">'
+    st.markdown(f"""<div style="display:flex; align-items:center;">{logo_html}<div><div style="font-size:24px; font-weight:bold; color:#202124; line-height:1.2;">Agence Pro'AGOrA</div><div style="font-size:12px; color:#5F6368;">Superviseur IA v2.1</div></div></div>""", unsafe_allow_html=True)
 
-# Boutons Header (Ressources)
 with c2:
     if st.session_state.get("current_context_doc"):
         doc = st.session_state.current_context_doc
         with st.popover(f"📄 {doc['type']}", use_container_width=True):
             st.markdown(f"### {doc['titre']}")
             st.info(doc.get('contexte', ''))
-            st.markdown("**Missions principales :**")
-            for m in doc.get('missions', []):
-                st.markdown(f"- {m}")
-            st.markdown(f"**Profil recherché :** {doc.get('profil', '')}")
+            st.markdown("**Missions :**")
+            for m in doc.get('missions', []): st.markdown(f"- {m}")
             st.markdown("---")
             if 'lien_url' in doc: st.link_button(doc.get('lien_titre', 'En savoir plus'), doc['lien_url'])
 
@@ -402,75 +393,50 @@ with c4:
         st.link_button("📂 ENT", "https://cas.ent.auvergnerhonealpes.fr/login?service=https%3A%2F%2Fglieres.ent.auvergnerhonealpes.fr%2Fsg.do%3FPROC%3DPAGE_ACCUEIL")
 
 with c5:
-    # Correction NameError : user_label est maintenant défini AVANT
     st.button(f"👤", help=user_label, disabled=True, use_container_width=True)
 
-st.markdown("<hr style='margin: 0 0 10px 0;'>", unsafe_allow_html=True)
+st.markdown("<hr style='margin: 0 0 20px 0;'>", unsafe_allow_html=True)
 
-# --- PAGE D'ACCUEIL (SI PAS DE MESSAGE) ---
-if not st.session_state.messages:
-    
-    st.markdown("""
-    <div class="welcome-card">
-        <h3>👋 Bienvenue à l'Agence !</h3>
-        <p>Configure ta mission ci-dessous pour commencer.</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    c_nom, c_btn = st.columns([2,1])
-    name_input = c_nom.text_input("Ton Prénom", key="name_center")
-    
-    col_th, col_dos = st.columns(2)
-    theme_center = col_th.selectbox("Choisis ton Thème", list(DB_PREMIERE.keys()), key="center_theme")
-    dossier_center = col_dos.selectbox("Choisis ta Mission", list(DB_PREMIERE[theme_center].keys()), key="center_dossier")
-    
-    if st.button("🚀 COMMENCER LA MISSION", type="primary", use_container_width=True):
-        if name_input:
-            lancer_mission_centrale(theme_center, dossier_center, name_input)
-            st.rerun()
-        else:
-            st.toast("Entre ton prénom pour valider.", icon="✍️")
+# --- CHAT ---
+for i, msg in enumerate(st.session_state.messages):
+    avatar = BOT_AVATAR if msg["role"] == "assistant" else "🧑‍🎓"
+    with st.chat_message(msg["role"], avatar=avatar):
+        st.markdown(msg["content"])
+        if st.session_state.get("mode_audio") and msg["role"] == "assistant" and HAS_AUDIO:
+            key = f"aud_{i}"
+            if key not in st.session_state:
+                try:
+                    tts = gTTS(clean_text_for_audio(msg["content"]), lang='fr')
+                    buf = BytesIO()
+                    tts.write_to_fp(buf)
+                    st.session_state[key] = buf
+                except: pass
+            if key in st.session_state:
+                st.audio(st.session_state[key], format="audio/mp3")
 
-# --- CHAT CENTRAL (SI MESSAGE) ---
-else:
-    for i, msg in enumerate(st.session_state.messages):
-        avatar = BOT_AVATAR if msg["role"] == "assistant" else "🧑‍🎓"
-        with st.chat_message(msg["role"], avatar=avatar):
-            st.markdown(msg["content"])
-            if st.session_state.get("mode_audio") and msg["role"] == "assistant" and HAS_AUDIO:
-                key = f"aud_{i}"
-                if key not in st.session_state:
-                    try:
-                        tts = gTTS(clean_text_for_audio(msg["content"]), lang='fr')
-                        buf = BytesIO()
-                        tts.write_to_fp(buf)
-                        st.session_state[key] = buf
-                    except: pass
-                if key in st.session_state:
-                    st.audio(st.session_state[key], format="audio/mp3")
+st.markdown("<br><br>", unsafe_allow_html=True)
 
-    st.markdown("<br><br>", unsafe_allow_html=True)
+# --- FOOTER & INPUT ---
+st.markdown('<div class="fixed-footer">Agence Pro\'AGOrA - Données Fictives Uniquement</div>', unsafe_allow_html=True)
 
-    # INPUT
-    if user_input := st.chat_input("Votre réponse..."):
+if user_input := st.chat_input("Votre réponse..."):
+    if not student_name:
+        st.toast("Identifiez-vous dans le menu.", icon="👤")
+    else:
         st.session_state.messages.append({"role": "user", "content": user_input})
         st.rerun()
 
-    # REPONSE IA
-    if st.session_state.messages and st.session_state.messages[-1]["role"] == "user":
-        with st.chat_message("assistant", avatar=BOT_AVATAR):
-            with st.spinner("..."):
-                sys = SYSTEM_PROMPT
-                if st.session_state.get("mode_simple"): sys += " UTILISE DES MOTS SIMPLES."
-                if st.session_state.get("current_context_doc"):
-                    sys += f"\nCONTEXTE : {st.session_state.current_context_doc['titre']}"
+if st.session_state.messages[-1]["role"] == "user":
+    with st.chat_message("assistant", avatar=BOT_AVATAR):
+        with st.spinner("Analyse..."):
+            sys = SYSTEM_PROMPT
+            if st.session_state.get("mode_simple"): sys += " UTILISE DES MOTS SIMPLES. FAIS DES LISTES."
+            if st.session_state.get("current_context_doc"):
+                sys += f"\nCONTEXTE MISSION : {st.session_state.current_context_doc['titre']}."
 
-                msgs = [{"role": "system", "content": sys}] + st.session_state.messages[-6:]
-                resp, _ = query_groq_with_rotation(msgs)
-                if not resp: resp = "Erreur technique."
-                st.markdown(resp)
-                st.session_state.messages.append({"role": "assistant", "content": resp})
-                if st.session_state.get("mode_audio"): st.rerun()
-
-# Footer
-st.markdown('<div class="fixed-footer">Agence Pro\'AGOrA - Données Fictives Uniquement</div>', unsafe_allow_html=True)
+            msgs = [{"role": "system", "content": sys}] + st.session_state.messages[-6:]
+            resp, _ = query_groq_with_rotation(msgs)
+            if not resp: resp = "Erreur technique."
+            st.markdown(resp)
+            st.session_state.messages.append({"role": "assistant", "content": resp})
+            if st.session_state.get("mode_audio"): st.rerun()
