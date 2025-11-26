@@ -63,7 +63,6 @@ st.markdown(f"""
     }}
 
     /* --- CORRECTION HEADER MOBILE --- */
-    /* On ne cache plus le header complètement, sinon on perd la flèche du menu sur mobile */
     header {{
         background-color: transparent !important;
     }}
@@ -122,21 +121,24 @@ st.markdown(f"""
         border-radius: 12px;
         margin-bottom: 0.5rem;
     }}
+    /* Assistant */
     [data-testid="stChatMessage"][data-testid="assistant"] {{
         background-color: #FFFFFF;
         border: 1px solid #E0E0E0;
     }}
+    /* Élève */
     [data-testid="stChatMessage"][data-testid="user"] {{
         background-color: #E3F2FD;
         border: none;
     }}
+    /* Avatars */
     [data-testid="stChatMessageAvatar"] img {{
         border-radius: 50%;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         object-fit: cover;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }}
 
-    /* FOOTER & INPUT */
+    /* --- FOOTER FIXE --- */
     .fixed-footer {{
         position: fixed;
         left: 0;
@@ -146,8 +148,9 @@ st.markdown(f"""
         color: #FFF;
         text-align: center;
         padding: 6px;
-        font-size: 10px;
+        font-size: 11px;
         z-index: 99999;
+        box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
     }}
     [data-testid="stBottom"] {{ bottom: 40px !important; padding-bottom: 10px; }}
     
@@ -266,11 +269,9 @@ Veuillez lancer votre mission ci-dessous.
 
 # --- 9. FONCTIONS DE LANCEMENT ---
 def lancer_mission_centrale(theme, dossier, prenom):
-    # Mise à jour des états pour synchroniser Sidebar et Main
     st.session_state.selected_theme = theme
     st.session_state.selected_dossier = dossier
     
-    # Récupération Données
     data = DB_PREMIERE[theme][dossier]
     if isinstance(data, str):
         competence = data
@@ -312,15 +313,13 @@ with st.sidebar:
     
     st.info("🔒 **Espace Sécurisé** : Données fictives.")
     
-    # Si le prénom n'est pas encore défini, on le demande ici aussi
     sidebar_name = st.text_input("Votre Prénom (Menu)", key="name_sidebar")
     
     st.subheader("📂 Changer de Mission")
-    # On utilise des clés uniques pour éviter les conflits avec le menu central
     sb_theme = st.selectbox("Thème", list(DB_PREMIERE.keys()), key="sb_theme")
     sb_dossier = st.selectbox("Dossier", list(DB_PREMIERE[sb_theme].keys()), key="sb_dossier")
     
-    if st.button("RELANCER LA MISSION", type="primary"):
+    if st.button("RELANCER LA MISSION", type="primary", use_container_width=True):
         if sidebar_name:
             lancer_mission_centrale(sb_theme, sb_dossier, sidebar_name)
             st.rerun()
@@ -339,7 +338,28 @@ with st.sidebar:
             st.session_state.messages.append({"role": "user", "content": f"PROPOSITION : {txt}"})
             st.rerun()
     
-    if st.button("🗑️ Reset"):
+    st.markdown("---")
+    
+    # --- BOUTON SAUVEGARDE (Réintégré) ---
+    if len(st.session_state.messages) > 1:
+        chat_df = pd.DataFrame(st.session_state.messages)
+        csv_data = chat_df.to_csv(index=False).encode('utf-8')
+        
+        # Utilisation du nom de l'élève s'il est dispo, sinon "anonyme"
+        safe_name = sidebar_name if sidebar_name else st.session_state.get("name_center", "anonyme")
+        date_str = datetime.now().strftime("%d%m_%H%M")
+        file_name = f"suivi_agora_{safe_name}_{date_str}.csv"
+        
+        st.download_button(
+            label="💾 Sauvegarder (CSV)",
+            data=csv_data,
+            file_name=file_name,
+            mime="text/csv",
+            use_container_width=True,
+            help="Garder une trace de l'échange"
+        )
+    
+    if st.button("🗑️ Reset", use_container_width=True):
         st.session_state.messages = []
         st.rerun()
 
@@ -350,7 +370,7 @@ with c1:
     if os.path.exists(LOGO_AGORA):
         b64 = img_to_base64(LOGO_AGORA)
         logo_html = f'<img src="data:image/png;base64,{b64}" style="height:40px; margin-right:10px;">'
-    st.markdown(f"""<div style="display:flex; align-items:center;">{logo_html}<div><div style="font-size:20px; font-weight:bold; color:#202124;">Agence Pro'AGOrA</div></div></div>""", unsafe_allow_html=True)
+    st.markdown(f"""<div style="display:flex; align-items:center; white-space:nowrap; overflow:hidden;">{logo_html}<div><div class="header-title" style="font-weight:bold; color:#202124;">Agence Pro'AGOrA</div><div class="header-subtitle" style="color:#5F6368;">Superviseur IA v1.9</div></div></div>""", unsafe_allow_html=True)
 
 # Boutons Header (Ressources)
 with c2:
@@ -373,15 +393,13 @@ with c4:
         st.link_button("📂 ENT", "https://cas.ent.auvergnerhonealpes.fr/login?service=https%3A%2F%2Fglieres.ent.auvergnerhonealpes.fr%2Fsg.do%3FPROC%3DPAGE_ACCUEIL")
 
 with c5:
-    st.button("👤", disabled=True, use_container_width=True)
+    st.button(f"👤", help=user_label, disabled=True, use_container_width=True)
 
 st.markdown("<hr style='margin: 0 0 10px 0;'>", unsafe_allow_html=True)
 
 # --- PAGE D'ACCUEIL (SI PAS DE MESSAGE) ---
-# C'est ICI qu'on règle le problème mobile : le menu s'affiche au centre si pas démarré
 if not st.session_state.messages:
     
-    # Carte d'accueil centrée
     st.markdown("""
     <div class="welcome-card">
         <h3>👋 Bienvenue à l'Agence !</h3>
@@ -398,7 +416,6 @@ if not st.session_state.messages:
     
     if st.button("🚀 COMMENCER LA MISSION", type="primary", use_container_width=True):
         if name_input:
-            # On synchronise le nom pour la sidebar aussi
             lancer_mission_centrale(theme_center, dossier_center, name_input)
             st.rerun()
         else:
