@@ -31,13 +31,40 @@ st.set_page_config(
     initial_sidebar_state="auto"
 )
 
-# --- 2. GESTION ÉTAT ---
+# --- 2. GESTION ÉTAT (XP & JEU) ---
 if "messages" not in st.session_state: st.session_state.messages = []
 if "logs" not in st.session_state: st.session_state.logs = []
 if "notifications" not in st.session_state: st.session_state.notifications = ["Bienvenue."]
 if "current_context_doc" not in st.session_state: st.session_state.current_context_doc = None
 
-# --- 3. VARIABLES DE CONTEXTE (VILLES & ORGANISATIONS) ---
+# -- GAMIFICATION --
+if "xp" not in st.session_state: st.session_state.xp = 0
+if "grade" not in st.session_state: st.session_state.grade = "👶 Stagiaire"
+
+GRADES = {
+    0: "👶 Stagiaire",
+    100: "👦 Assistant(e) Junior",
+    300: "👨‍💼 Assistant(e) Confirmé(e)",
+    600: "👩‍💻 Responsable de Pôle",
+    1000: "👑 Directeur(trice)"
+}
+
+def update_xp(amount):
+    st.session_state.xp += amount
+    # Mise à jour du grade
+    current_grade = "👶 Stagiaire"
+    for palier, titre in GRADES.items():
+        if st.session_state.xp >= palier:
+            current_grade = titre
+    
+    if current_grade != st.session_state.grade:
+        st.session_state.grade = current_grade
+        st.toast(f"NIVEAU SUPÉRIEUR ! Tu es maintenant {current_grade} !", icon="🎉")
+        st.balloons()
+    else:
+        st.toast(f"+{amount} XP", icon="⭐")
+
+# --- 3. VARIABLES DE CONTEXTE ---
 VILLES_FRANCE = [
     "Lyon", "Bordeaux", "Lille", "Nantes", "Strasbourg", "Toulouse", "Marseille", "Nice", "Rennes", 
     "Montpellier", "Grenoble", "Dijon", "Angers", "Nîmes", "Saint-Étienne", "Clermont-Ferrand", 
@@ -187,8 +214,7 @@ def log_interaction(student, role, content):
         "User": student, "Role": role, "Msg": content[:50]
     })
 
-# --- 8. DONNÉES MÉTIER (SCÉNARIOS & PROCÉDURES) ---
-# J'ai ajouté le champ "procedure" qui dicte à l'IA les étapes précises
+# --- 8. DONNÉES MÉTIER ---
 DB_PREMIERE = {
     "RESSOURCES HUMAINES": {
         "Recrutement": {
@@ -240,7 +266,7 @@ DB_PREMIERE = {
     }
 }
 
-# --- 9. IA (PROMPT EXPERT & DIRECTIF) ---
+# --- 9. IA (PROMPT EXPERT) ---
 SYSTEM_PROMPT = """
 RÔLE : Tu es le Tuteur de stage de l'élève (Bac Pro AGOrA).
 TON : Professionnel, directif, pédagogique.
@@ -268,11 +294,9 @@ if not st.session_state.messages:
     st.session_state.messages.append({"role": "assistant", "content": INITIAL_MESSAGE})
 
 def lancer_mission(prenom):
-    # 1. Tirage aléatoire du contexte (Lieu & Ville)
     lieu = random.choice(TYPES_ORGANISATIONS)
     ville = random.choice(VILLES_FRANCE)
     
-    # 2. Récupération Données Mission
     data = DB_PREMIERE[st.session_state.theme][st.session_state.dossier]
     
     if isinstance(data, str):
@@ -284,7 +308,6 @@ def lancer_mission(prenom):
         procedure = data.get("procedure", "Procédure standard.")
         st.session_state.current_context_doc = data.get("doc", None)
 
-    # 3. Initialisation
     st.session_state.messages = []
     
     contexte_ia = ""
@@ -296,7 +319,6 @@ def lancer_mission(prenom):
         - Missions : {', '.join(doc.get('missions', []))}
         """
 
-    # 4. Prompt de Démarrage (Contextualisé)
     prompt = f"""
     NOUVELLE SESSION DE STAGE.
     STAGIAIRE : {prenom}
@@ -332,7 +354,14 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # GAMIFICATION & IDENTITÉ
+    # --- ZONE GAMIFICATION (XP) ---
+    st.markdown(f"### 🏆 {st.session_state.grade}")
+    # Barre de progression (XP / 1000 max pour l'exemple)
+    progress_val = min(st.session_state.xp / 1000, 1.0)
+    st.progress(progress_val)
+    st.caption(f"XP Total : {st.session_state.xp} pts")
+    
+    # Identité
     student_name = st.text_input("Prénom", placeholder="Ex: Camille")
     user_label = f"👤 {student_name}" if student_name else "👤 Invité"
     
@@ -340,35 +369,53 @@ with st.sidebar:
     st.session_state.theme = st.selectbox("Thème", list(DB_PREMIERE.keys()))
     st.session_state.dossier = st.selectbox("Dossier", list(DB_PREMIERE[st.session_state.theme].keys()))
     
-    if st.button("LANCER LA MISSION", type="primary"):
-        if student_name:
-            lancer_mission(student_name)
+    # Boutons Lancement et Validation
+    col_launch, col_valid = st.columns([1.5, 1])
+    with col_launch:
+        if st.button("LANCER", type="primary"):
+            if student_name:
+                lancer_mission(student_name)
+                st.rerun()
+            else:
+                st.warning("Prénom requis")
+    
+    with col_valid:
+        # Bouton pour valider une étape et gagner des points manuellement
+        if st.button("✅ ÉTAPE", help="Clique ici quand tu as validé une étape avec le tuteur"):
+            update_xp(10)
             st.rerun()
-        else:
-            st.warning("Prénom requis")
 
-    # BOUTON SAUVEGARDE (Fixe)
+    # Options & Sauvegarde
+    with st.expander("🛠️ Options"):
+        st.checkbox("Mode DYS", key="mode_dys")
+        st.checkbox("Audio", key="mode_audio")
+        st.checkbox("Simplifié", key="mode_simple")
+        
     st.markdown("---")
     
-    # Préparation du CSV
+    uploaded_file = st.file_uploader("Rendre un travail", type=['docx'])
+    if uploaded_file and student_name:
+        if st.button("Envoyer à la correction"):
+            txt = extract_text_from_docx(uploaded_file)
+            st.session_state.messages.append({"role": "user", "content": f"PROPOSITION : {txt}"})
+            update_xp(20) # Récompense pour travail rendu
+            st.rerun()
+            
+    # Bouton Sauvegarde (Toujours visible)
     if len(st.session_state.messages) > 0:
         chat_df = pd.DataFrame(st.session_state.messages)
         csv_data = chat_df.to_csv(index=False).encode('utf-8')
         file_name = f"agora_{student_name}_{datetime.now().strftime('%H%M')}.csv"
-        state_disabled = False
+        
+        st.download_button(
+            label="💾 Sauvegarder",
+            data=csv_data,
+            file_name=file_name,
+            mime="text/csv",
+            help="Télécharge ta conversation pour le dossier CCF"
+        )
     else:
-        csv_data = ""
-        file_name = "vide.csv"
-        state_disabled = True
-    
-    st.download_button(
-        label="💾 Sauvegarder mon travail",
-        data=csv_data,
-        file_name=file_name,
-        mime="text/csv",
-        disabled=state_disabled,
-        help="Télécharge ta conversation pour le dossier CCF"
-    )
+        st.button("💾 Sauvegarder", disabled=True) # Bouton grisé si vide
     
     if st.button("🗑️ Reset"):
         st.session_state.messages = [{"role": "assistant", "content": INITIAL_MESSAGE}]
@@ -383,7 +430,7 @@ with c1:
     if os.path.exists(LOGO_AGORA):
         b64 = img_to_base64(LOGO_AGORA)
         logo_html = f'<img src="data:image/png;base64,{b64}" style="height:45px; vertical-align:middle; margin-right:10px;">'
-    st.markdown(f"""<div style="display:flex; align-items:center;">{logo_html}<div><div style="font-size:24px; font-weight:bold; color:#202124; line-height:1.2;">Agence Pro'AGOrA</div><div style="font-size:12px; color:#5F6368;">Superviseur IA v2.2</div></div></div>""", unsafe_allow_html=True)
+    st.markdown(f"""<div style="display:flex; align-items:center;">{logo_html}<div><div style="font-size:24px; font-weight:bold; color:#202124; line-height:1.2;">Agence Pro'AGOrA</div><div style="font-size:12px; color:#5F6368;">Superviseur IA v2.3 (Gamifiée)</div></div></div>""", unsafe_allow_html=True)
 
 with c2:
     if st.session_state.get("current_context_doc"):
@@ -417,8 +464,7 @@ for i, msg in enumerate(st.session_state.messages):
     with st.chat_message(msg["role"], avatar=avatar):
         st.markdown(msg["content"])
         if msg["role"] == "assistant" and HAS_AUDIO:
-            # Petit bouton audio discret sous chaque message assistant
-            if st.button("🔊", key=f"tts_{i}", help="Lire ce message"):
+            if st.button("🔊", key=f"tts_{i}", help="Lire"):
                 try:
                     tts = gTTS(clean_text_for_audio(msg["content"]), lang='fr')
                     buf = BytesIO()
