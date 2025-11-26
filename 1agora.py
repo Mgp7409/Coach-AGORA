@@ -28,7 +28,7 @@ st.set_page_config(
     page_title="Agence Pro'AGOrA", 
     page_icon=PAGE_ICON, 
     layout="wide",
-    initial_sidebar_state="auto" # "auto" laisse Streamlit choisir (fermé sur mobile, ouvert sur PC)
+    initial_sidebar_state="auto"
 )
 
 # --- 2. GESTION ÉTAT ---
@@ -36,6 +36,9 @@ if "messages" not in st.session_state: st.session_state.messages = []
 if "logs" not in st.session_state: st.session_state.logs = []
 if "notifications" not in st.session_state: st.session_state.notifications = ["Bienvenue."]
 if "current_context_doc" not in st.session_state: st.session_state.current_context_doc = None
+# Variables pour le menu
+if "selected_theme" not in st.session_state: st.session_state.selected_theme = None
+if "selected_dossier" not in st.session_state: st.session_state.selected_dossier = None
 
 # --- 3. OUTILS IMAGE ---
 def img_to_base64(img_path):
@@ -44,81 +47,96 @@ def img_to_base64(img_path):
             return base64.b64encode(f.read()).decode()
     return ""
 
-# --- 4. STYLE & CSS RESPONSIVE (MOBILE & DESKTOP) ---
+# --- 4. STYLE & CSS (MOBILE FIRST) ---
 is_dys = st.session_state.get("mode_dys", False)
 font_family = "'Verdana', sans-serif" if is_dys else "'Segoe UI', 'Roboto', Helvetica, Arial, sans-serif"
-base_font_size = "18px" if is_dys else "16px"
+font_size = "18px" if is_dys else "16px"
 
 st.markdown(f"""
 <style>
-    /* --- GLOBAL --- */
+    /* GLOBAL */
     html, body, [class*="css"] {{
         font-family: {font_family} !important;
-        font-size: {base_font_size};
+        font-size: {font_size};
         color: #202124;
         background-color: #FFFFFF;
     }}
 
-    /* --- HEADER CLEAN --- */
-    header {{visibility: hidden;}} 
-    .reportview-container .main .block-container {{
-        padding-top: 1rem;
-        padding-bottom: 5rem; /* Espace pour le footer */
-        max-width: 100%;
+    /* --- CORRECTION HEADER MOBILE --- */
+    /* On ne cache plus le header complètement, sinon on perd la flèche du menu sur mobile */
+    header {{
+        background-color: transparent !important;
+    }}
+    [data-testid="stHeader"] {{
+        background-color: rgba(255, 255, 255, 0.95);
+    }}
+    
+    /* La flèche du menu (Sidebar toggle) */
+    [data-testid="stSidebarCollapsedControl"] {{
+        color: #1A73E8 !important;
+        font-weight: bold;
     }}
 
-    /* --- NAVBAR (Barre du haut) --- */
+    /* NAVBAR PERSONNALISÉE */
+    .navbar-container {{
+        display: flex;
+        align-items: center;
+        background-color: white;
+        padding: 10px 5px;
+        border-bottom: 1px solid #E0E0E0;
+        margin-bottom: 10px;
+        min-height: 60px;
+    }}
+
+    /* BOUTONS NAVBAR */
     div[data-testid="stHorizontalBlock"] button {{
         background-color: transparent;
-        border: 1px solid transparent;
+        border: none;
         color: #5F6368;
         font-weight: 500;
-        padding: 0.2rem 0.5rem;
+        padding: 0 5px;
     }}
     div[data-testid="stHorizontalBlock"] button:hover {{
         color: #1A73E8;
         background-color: #F1F3F4;
-        border-radius: 8px;
     }}
 
-    /* --- BOUTON CONTEXTE (Rouge/Actif) --- */
-    .context-btn button {{
-        color: #D93025 !important;
-        font-weight: bold !important;
-        border: 1px solid #FCE8E6 !important;
-        background-color: #FEF7F6 !important;
-    }}
-
-    /* --- SIDEBAR --- */
+    /* SIDEBAR */
     [data-testid="stSidebar"] {{
         background-color: #F8F9FA;
         border-right: 1px solid #E0E0E0;
     }}
 
-    /* --- CHAT --- */
+    /* BOUTON PRIMAIRE */
+    button[kind="primary"] {{
+        background: linear-gradient(135deg, #0F9D58 0%, #00C9FF 100%);
+        color: white !important;
+        border: none;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        width: 100%;
+    }}
+
+    /* CHAT */
     [data-testid="stChatMessage"] {{
         padding: 1rem;
         border-radius: 12px;
         margin-bottom: 0.5rem;
     }}
-    /* Assistant */
     [data-testid="stChatMessage"][data-testid="assistant"] {{
         background-color: #FFFFFF;
         border: 1px solid #E0E0E0;
     }}
-    /* Élève */
     [data-testid="stChatMessage"][data-testid="user"] {{
         background-color: #E3F2FD;
         border: none;
     }}
-    /* Avatars */
     [data-testid="stChatMessageAvatar"] img {{
         border-radius: 50%;
-        object-fit: cover;
         box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        object-fit: cover;
     }}
 
-    /* --- FOOTER FIXE --- */
+    /* FOOTER & INPUT */
     .fixed-footer {{
         position: fixed;
         left: 0;
@@ -128,49 +146,19 @@ st.markdown(f"""
         color: #FFF;
         text-align: center;
         padding: 6px;
-        font-size: 11px;
+        font-size: 10px;
         z-index: 99999;
-        box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
     }}
-
-    /* --- OPTIMISATION MOBILE (MEDIA QUERIES) --- */
-    @media only screen and (max-width: 768px) {{
-        /* Réduire la taille du titre sur mobile */
-        .header-title {{
-            font-size: 18px !important;
-        }}
-        .header-subtitle {{
-            font-size: 10px !important;
-            display: none; /* On cache le sous-titre sur très petit écran */
-        }}
-        
-        /* Ajuster les marges du chat */
-        .block-container {{
-            padding-left: 0.5rem !important;
-            padding-right: 0.5rem !important;
-        }}
-        
-        /* Remonter la zone de saisie pour le clavier virtuel */
-        [data-testid="stBottom"] {{
-            bottom: 40px !important; 
-        }}
-        
-        /* Réduire la taille des avatars sur mobile */
-        [data-testid="stChatMessageAvatar"] {{
-            width: 30px !important;
-            height: 30px !important;
-        }}
-        
-        /* Footer plus discret sur mobile */
-        .fixed-footer {{
-            font-size: 9px;
-            padding: 4px;
-        }}
-    }}
+    [data-testid="stBottom"] {{ bottom: 40px !important; padding-bottom: 10px; }}
     
-    /* Sur PC, on garde de l'espace pour la saisie */
-    @media only screen and (min-width: 769px) {{
-        [data-testid="stBottom"] {{ bottom: 35px !important; }}
+    /* CARTE D'ACCUEIL (MOBILE) */
+    .welcome-card {{
+        background-color: #F8F9FA;
+        border-radius: 15px;
+        padding: 20px;
+        text-align: center;
+        border: 1px solid #E0E0E0;
+        margin-bottom: 20px;
     }}
 
 </style>
@@ -234,14 +222,9 @@ DB_PREMIERE = {
                 "type": "Fiche de Poste",
                 "titre": "Assistant(e) Commercial(e) (H/F)",
                 "contexte": "La PME 'EcoBat' (Bâtiment écologique, 45 salariés) cherche à renforcer son équipe commerciale.",
-                "missions": [
-                    "Accueil téléphonique et physique des clients.",
-                    "Rédaction et suivi des devis.",
-                    "Mise à jour de la base de données clients.",
-                    "Relance des impayés."
-                ],
-                "profil": "Bac Pro AGOrA, organisé(e), bon relationnel, maîtrise d'Excel.",
-                "lien_titre": "Voir la fiche métier complète (ONISEP)",
+                "missions": ["Accueil clients.", "Suivi des devis.", "Relance impayés."],
+                "profil": "Bac Pro AGOrA, organisé(e), bon relationnel.",
+                "lien_titre": "Fiche métier (ONISEP)",
                 "lien_url": "https://www.onisep.fr/ressources/univers-metier/metiers/assistant-assistante-commercial-commerciale"
             }
         },
@@ -267,27 +250,28 @@ TON : Professionnel, bienveillant mais exigeant.
 MISSION : Guider l'élève (Bac Pro) sans jamais faire le travail à sa place.
 
 RÈGLES CLÉS :
-1. SOURCES (TROMBONE) : Quand tu donnes une info, AJOUTE SYSTÉMATIQUEMENT une source à la fin.
-   - "📎 Source : [Nom de la source]"
-2. PÉDAGOGIE : Si l'élève est bloqué, donne-lui un indice.
-3. CONTEXTE : Tu connais les détails de la mission (Fiche de poste, Entreprise) si elles sont fournies. Utilise-les.
+1. SOURCES : Ajoute "📎 Source : [Nom]" quand tu donnes une info.
+2. PÉDAGOGIE : Si l'élève bloque, donne un indice.
+3. CONTEXTE : Utilise les infos de la mission (Fiche poste, Entreprise).
 
-SÉCURITÉ : Si données réelles (noms, tel) -> STOP et demande anonymisation.
-FORMAT : Réponses aérées. Max 4 phrases.
+SÉCURITÉ : Données réelles -> STOP.
 """
 
 INITIAL_MESSAGE = """
 👋 **Bonjour.**
 
 Bienvenue à l'Agence **Pro'AGOrA**.
-Veuillez sélectionner votre **Mission** à gauche (Menu >).
+Veuillez lancer votre mission ci-dessous.
 """
 
-if not st.session_state.messages:
-    st.session_state.messages.append({"role": "assistant", "content": INITIAL_MESSAGE})
-
-def lancer_mission():
-    data = DB_PREMIERE[st.session_state.theme][st.session_state.dossier]
+# --- 9. FONCTIONS DE LANCEMENT ---
+def lancer_mission_centrale(theme, dossier, prenom):
+    # Mise à jour des états pour synchroniser Sidebar et Main
+    st.session_state.selected_theme = theme
+    st.session_state.selected_dossier = dossier
+    
+    # Récupération Données
+    data = DB_PREMIERE[theme][dossier]
     if isinstance(data, str):
         competence = data
         st.session_state.current_context_doc = None
@@ -300,15 +284,10 @@ def lancer_mission():
     contexte_ia = ""
     if st.session_state.current_context_doc:
         doc = st.session_state.current_context_doc
-        contexte_ia = f"""
-        DÉTAILS DU CAS PRATIQUE (A UTILISER) :
-        - Poste : {doc['titre']}
-        - Contexte : {doc.get('contexte', '')}
-        - Missions : {', '.join(doc.get('missions', []))}
-        """
+        contexte_ia = f"DÉTAILS DU CAS : Poste {doc['titre']} - {doc.get('contexte', '')}"
 
     prompt = f"""
-    CONTEXTE : Démarrage mission '{st.session_state.dossier}'.
+    CONTEXTE : Démarrage mission '{dossier}' par l'élève {prenom}.
     COMPÉTENCE : {competence}
     {contexte_ia}
     ACTION : Incarne le responsable. Accueille l'élève, donne le contexte et la 1ère consigne.
@@ -318,151 +297,153 @@ def lancer_mission():
     with st.spinner("Initialisation..."):
         resp, _ = query_groq_with_rotation(msgs)
         st.session_state.messages.append({"role": "assistant", "content": resp})
-    add_notification(f"Mission lancée : {st.session_state.dossier}")
+    add_notification(f"Mission lancée : {dossier}")
 
-# --- 9. INTERFACE ---
+# --- 10. INTERFACE GRAPHIQUE ---
 
 LOGO_LYCEE = "logo_lycee.png"
 LOGO_AGORA = "logo_agora.png"
 BOT_AVATAR = LOGO_AGORA if os.path.exists(LOGO_AGORA) else "🤖"
 
-# --- SIDEBAR ---
+# --- SIDEBAR (Menu Complet) ---
 with st.sidebar:
     if os.path.exists(LOGO_LYCEE): st.image(LOGO_LYCEE, width=100)
     else: st.header("Lycée Pro")
     
-    st.markdown("---")
-    st.info("🔒 **Espace Sécurisé** : Données fictives uniquement.")
+    st.info("🔒 **Espace Sécurisé** : Données fictives.")
     
-    student_name = st.text_input("Prénom", placeholder="Ex: Camille")
-    user_label = f"👤 {student_name}" if student_name else "👤 Invité"
+    # Si le prénom n'est pas encore défini, on le demande ici aussi
+    sidebar_name = st.text_input("Votre Prénom (Menu)", key="name_sidebar")
     
-    st.subheader("📂 Missions")
-    st.session_state.theme = st.selectbox("Thème", list(DB_PREMIERE.keys()))
-    st.session_state.dossier = st.selectbox("Dossier", list(DB_PREMIERE[st.session_state.theme].keys()))
+    st.subheader("📂 Changer de Mission")
+    # On utilise des clés uniques pour éviter les conflits avec le menu central
+    sb_theme = st.selectbox("Thème", list(DB_PREMIERE.keys()), key="sb_theme")
+    sb_dossier = st.selectbox("Dossier", list(DB_PREMIERE[sb_theme].keys()), key="sb_dossier")
     
-    if st.button("LANCER LA MISSION", type="primary", use_container_width=True):
-        if student_name:
-            lancer_mission()
+    if st.button("RELANCER LA MISSION", type="primary"):
+        if sidebar_name:
+            lancer_mission_centrale(sb_theme, sb_dossier, sidebar_name)
             st.rerun()
         else:
-            st.warning("Prénom requis !")
-            
+            st.warning("Prénom requis")
+
     with st.expander("🛠️ Options"):
         st.checkbox("Mode DYS", key="mode_dys")
         st.checkbox("Audio", key="mode_audio")
         st.checkbox("Simplifié", key="mode_simple")
         
-    uploaded_file = st.file_uploader("Rendre un travail (.docx)", type=['docx'])
-    if uploaded_file and student_name:
-        if st.button("Envoyer à la correction", use_container_width=True):
+    uploaded_file = st.file_uploader("Rendre un travail", type=['docx'])
+    if uploaded_file and sidebar_name:
+        if st.button("Envoyer à la correction"):
             txt = extract_text_from_docx(uploaded_file)
             st.session_state.messages.append({"role": "user", "content": f"PROPOSITION : {txt}"})
-            add_notification(f"Fichier envoyé : {uploaded_file.name}")
             st.rerun()
     
-    st.markdown("---")
-    if st.button("🗑️ Reset", use_container_width=True):
-        st.session_state.messages = [{"role": "assistant", "content": INITIAL_MESSAGE}]
-        st.session_state.current_context_doc = None
+    if st.button("🗑️ Reset"):
+        st.session_state.messages = []
         st.rerun()
 
-# --- HEADER FONCTIONNEL (Layout Responsive) ---
-# Utilisation de columns avec des ratios adaptés
+# --- HEADER VISUEL ---
 c1, c2, c3, c4, c5 = st.columns([3, 1, 1, 1, 1])
-
 with c1:
     logo_html = ""
     if os.path.exists(LOGO_AGORA):
         b64 = img_to_base64(LOGO_AGORA)
-        # Logo un peu plus petit sur mobile grâce au CSS responsive, ici taille fixe pour Desktop
-        logo_html = f'<img src="data:image/png;base64,{b64}" style="height:45px; vertical-align:middle; margin-right:10px;">'
-    st.markdown(f"""<div style="display:flex; align-items:center; white-space:nowrap; overflow:hidden;">{logo_html}<div><div class="header-title" style="font-weight:bold; color:#202124;">Agence Pro'AGOrA</div><div class="header-subtitle" style="color:#5F6368;">Superviseur IA v1.8</div></div></div>""", unsafe_allow_html=True)
+        logo_html = f'<img src="data:image/png;base64,{b64}" style="height:40px; margin-right:10px;">'
+    st.markdown(f"""<div style="display:flex; align-items:center;">{logo_html}<div><div style="font-size:20px; font-weight:bold; color:#202124;">Agence Pro'AGOrA</div></div></div>""", unsafe_allow_html=True)
 
-# Boutons (Utilisation de use_container_width pour remplir la colonne sur mobile)
+# Boutons Header (Ressources)
 with c2:
     if st.session_state.get("current_context_doc"):
         doc = st.session_state.current_context_doc
         with st.popover(f"📄 {doc['type']}", use_container_width=True):
-            st.markdown(f"### {doc['titre']}")
-            st.info(doc.get('contexte', ''))
-            st.markdown("**Missions principales :**")
-            for m in doc.get('missions', []):
-                st.markdown(f"- {m}")
-            st.markdown(f"**Profil recherché :** {doc.get('profil', '')}")
+            st.markdown(f"**{doc['titre']}**")
+            st.caption(doc.get('contexte', ''))
             st.markdown("---")
-            if 'lien_url' in doc:
-                st.link_button(doc.get('lien_titre', 'En savoir plus'), doc['lien_url'])
+            if 'lien_url' in doc: st.link_button("Voir fiche", doc['lien_url'])
 
 with c3:
     with st.popover("ℹ️ Métiers", use_container_width=True):
-        st.markdown("### 📋 Fiches Métiers AGOrA")
-        st.info("Tu es perdu ? Voici les rôles principaux :")
-        st.markdown("""
-        **👩‍💼 Assistant(e) de Gestion**
-        *Gère l'administratif, l'accueil et les dossiers courants.*
-        **📦 Gestionnaire de Stocks**
-        *Suit les entrées/sorties de marchandises.*
-        **🛒 Assistant(e) Commercial(e)**
-        *Fait les devis et suit les commandes.*
-        **👥 Assistant(e) RH**
-        *Prépare les contrats et suit les congés.*
-        """)
-        st.markdown("---")
-        st.link_button("🔗 Voir toutes les fiches (ONISEP)", "https://www.onisep.fr/metiers")
+        st.markdown("**👩‍💼 Assistant(e) Gestion**\n*Administratif, accueil.*")
+        st.markdown("**👥 Assistant(e) RH**\n*Contrats, paie.*")
+        st.link_button("🔗 ONISEP", "https://www.onisep.fr/metiers")
 
 with c4:
     with st.popover("❓ Aide", use_container_width=True):
-        st.markdown("### 📚 Ressources")
-        st.link_button("📂 Cours (ENT)", "https://cas.ent.auvergnerhonealpes.fr/login?service=https%3A%2F%2Fglieres.ent.auvergnerhonealpes.fr%2Fsg.do%3FPROC%3DPAGE_ACCUEIL")
-        st.caption("Contactez le prof en cas de souci.")
+        st.link_button("📂 ENT", "https://cas.ent.auvergnerhonealpes.fr/login?service=https%3A%2F%2Fglieres.ent.auvergnerhonealpes.fr%2Fsg.do%3FPROC%3DPAGE_ACCUEIL")
 
 with c5:
-    # On affiche juste une icône sur mobile si le nom est trop long
-    st.button(f"👤", help=user_label, disabled=True, use_container_width=True)
+    st.button("👤", disabled=True, use_container_width=True)
 
-st.markdown("<hr style='margin: 0 0 20px 0;'>", unsafe_allow_html=True)
+st.markdown("<hr style='margin: 0 0 10px 0;'>", unsafe_allow_html=True)
 
-# --- CHAT CENTRAL ---
-for i, msg in enumerate(st.session_state.messages):
-    avatar = BOT_AVATAR if msg["role"] == "assistant" else "🧑‍🎓"
-    with st.chat_message(msg["role"], avatar=avatar):
-        st.markdown(msg["content"])
-        if st.session_state.get("mode_audio") and msg["role"] == "assistant" and HAS_AUDIO:
-            key = f"aud_{i}"
-            if key not in st.session_state:
-                try:
-                    tts = gTTS(clean_text_for_audio(msg["content"]), lang='fr')
-                    buf = BytesIO()
-                    tts.write_to_fp(buf)
-                    st.session_state[key] = buf
-                except: pass
-            if key in st.session_state:
-                st.audio(st.session_state[key], format="audio/mp3")
+# --- PAGE D'ACCUEIL (SI PAS DE MESSAGE) ---
+# C'est ICI qu'on règle le problème mobile : le menu s'affiche au centre si pas démarré
+if not st.session_state.messages:
+    
+    # Carte d'accueil centrée
+    st.markdown("""
+    <div class="welcome-card">
+        <h3>👋 Bienvenue à l'Agence !</h3>
+        <p>Configure ta mission ci-dessous pour commencer.</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    c_nom, c_btn = st.columns([2,1])
+    name_input = c_nom.text_input("Ton Prénom", key="name_center")
+    
+    col_th, col_dos = st.columns(2)
+    theme_center = col_th.selectbox("Choisis ton Thème", list(DB_PREMIERE.keys()), key="center_theme")
+    dossier_center = col_dos.selectbox("Choisis ta Mission", list(DB_PREMIERE[theme_center].keys()), key="center_dossier")
+    
+    if st.button("🚀 COMMENCER LA MISSION", type="primary", use_container_width=True):
+        if name_input:
+            # On synchronise le nom pour la sidebar aussi
+            lancer_mission_centrale(theme_center, dossier_center, name_input)
+            st.rerun()
+        else:
+            st.toast("Entre ton prénom pour valider.", icon="✍️")
 
-st.markdown("<br><br>", unsafe_allow_html=True)
+# --- CHAT CENTRAL (SI MESSAGE) ---
+else:
+    for i, msg in enumerate(st.session_state.messages):
+        avatar = BOT_AVATAR if msg["role"] == "assistant" else "🧑‍🎓"
+        with st.chat_message(msg["role"], avatar=avatar):
+            st.markdown(msg["content"])
+            if st.session_state.get("mode_audio") and msg["role"] == "assistant" and HAS_AUDIO:
+                key = f"aud_{i}"
+                if key not in st.session_state:
+                    try:
+                        tts = gTTS(clean_text_for_audio(msg["content"]), lang='fr')
+                        buf = BytesIO()
+                        tts.write_to_fp(buf)
+                        st.session_state[key] = buf
+                    except: pass
+                if key in st.session_state:
+                    st.audio(st.session_state[key], format="audio/mp3")
 
-# --- FOOTER & INPUT ---
-st.markdown('<div class="fixed-footer">Agence Pro\'AGOrA - Outil Pédagogique Sécurisé - Données Fictives Uniquement</div>', unsafe_allow_html=True)
+    st.markdown("<br><br>", unsafe_allow_html=True)
 
-if user_input := st.chat_input("Votre réponse..."):
-    if not student_name:
-        st.toast("Identifiez-vous dans le menu.", icon="👤")
-    else:
+    # INPUT
+    if user_input := st.chat_input("Votre réponse..."):
         st.session_state.messages.append({"role": "user", "content": user_input})
         st.rerun()
 
-if st.session_state.messages[-1]["role"] == "user":
-    with st.chat_message("assistant", avatar=BOT_AVATAR):
-        with st.spinner("Analyse..."):
-            sys = SYSTEM_PROMPT
-            if st.session_state.get("mode_simple"): sys += " UTILISE DES MOTS SIMPLES."
-            if st.session_state.get("current_context_doc"):
-                sys += f"\nCONTEXTE MISSION : Tu recrutes pour le poste de {st.session_state.current_context_doc['titre']}."
+    # REPONSE IA
+    if st.session_state.messages and st.session_state.messages[-1]["role"] == "user":
+        with st.chat_message("assistant", avatar=BOT_AVATAR):
+            with st.spinner("..."):
+                sys = SYSTEM_PROMPT
+                if st.session_state.get("mode_simple"): sys += " UTILISE DES MOTS SIMPLES."
+                if st.session_state.get("current_context_doc"):
+                    sys += f"\nCONTEXTE : {st.session_state.current_context_doc['titre']}"
 
-            msgs = [{"role": "system", "content": sys}] + st.session_state.messages[-6:]
-            resp, _ = query_groq_with_rotation(msgs)
-            if not resp: resp = "Erreur technique."
-            st.markdown(resp)
-            st.session_state.messages.append({"role": "assistant", "content": resp})
-            if st.session_state.get("mode_audio"): st.rerun()
+                msgs = [{"role": "system", "content": sys}] + st.session_state.messages[-6:]
+                resp, _ = query_groq_with_rotation(msgs)
+                if not resp: resp = "Erreur technique."
+                st.markdown(resp)
+                st.session_state.messages.append({"role": "assistant", "content": resp})
+                if st.session_state.get("mode_audio"): st.rerun()
+
+# Footer
+st.markdown('<div class="fixed-footer">Agence Pro\'AGOrA - Données Fictives Uniquement</div>', unsafe_allow_html=True)
