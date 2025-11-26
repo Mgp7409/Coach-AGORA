@@ -31,13 +31,14 @@ st.set_page_config(
     initial_sidebar_state="auto"
 )
 
-# --- 2. GESTION ÉTAT (XP & JEU) ---
+# --- 2. GESTION ÉTAT ---
 if "messages" not in st.session_state: st.session_state.messages = []
 if "logs" not in st.session_state: st.session_state.logs = []
-if "notifications" not in st.session_state: st.session_state.notifications = ["Bienvenue."]
+if "notifications" not in st.session_state: st.session_state.notifications = ["Système prêt."]
 if "current_context_doc" not in st.session_state: st.session_state.current_context_doc = None
+if "pgi_data" not in st.session_state: st.session_state.pgi_data = None # Pour le simulateur PGI
 
-# -- GAMIFICATION --
+# GAMIFICATION
 if "xp" not in st.session_state: st.session_state.xp = 0
 if "grade" not in st.session_state: st.session_state.grade = "👶 Stagiaire"
 
@@ -51,7 +52,6 @@ GRADES = {
 
 def update_xp(amount):
     st.session_state.xp += amount
-    # Mise à jour du grade
     current_grade = "👶 Stagiaire"
     for palier, titre in GRADES.items():
         if st.session_state.xp >= palier:
@@ -59,24 +59,14 @@ def update_xp(amount):
     
     if current_grade != st.session_state.grade:
         st.session_state.grade = current_grade
-        st.toast(f"NIVEAU SUPÉRIEUR ! Tu es maintenant {current_grade} !", icon="🎉")
+        st.toast(f"PROMOTION ! Tu es maintenant {current_grade} !", icon="🎉")
         st.balloons()
     else:
         st.toast(f"+{amount} XP", icon="⭐")
 
 # --- 3. VARIABLES DE CONTEXTE ---
-VILLES_FRANCE = [
-    "Lyon", "Bordeaux", "Lille", "Nantes", "Strasbourg", "Toulouse", "Marseille", "Nice", "Rennes", 
-    "Montpellier", "Grenoble", "Dijon", "Angers", "Nîmes", "Saint-Étienne", "Clermont-Ferrand", 
-    "Le Havre", "Tours", "Limoges", "Brest"
-]
-
-TYPES_ORGANISATIONS = [
-    "une Mairie (Service Technique)", "une Clinique Privée", "un Garage Automobile", 
-    "une Association d'Aide à Domicile", "une PME du Bâtiment", "une Agence Immobilière", 
-    "un Cabinet d'Architecte", "un Supermarché (Grande Distribution)", "une Entreprise de Transport", 
-    "un Office de Tourisme"
-]
+VILLES_FRANCE = ["Lyon", "Bordeaux", "Lille", "Nantes", "Strasbourg", "Toulouse", "Marseille", "Nice", "Rennes", "Dijon"]
+TYPES_ORGANISATIONS = ["Mairie", "Clinique", "Garage", "Association", "PME BTP", "Agence Immo", "Supermarché"]
 
 # --- 4. OUTILS IMAGE ---
 def img_to_base64(img_path):
@@ -92,74 +82,58 @@ font_size = "18px" if is_dys else "16px"
 
 st.markdown(f"""
 <style>
-    /* GLOBAL */
     html, body, [class*="css"] {{
         font-family: {font_family} !important;
         font-size: {font_size};
         color: #202124;
         background-color: #FFFFFF;
     }}
-
-    /* HEADER CLEAN */
     header {{background-color: transparent !important;}} 
     [data-testid="stHeader"] {{background-color: rgba(255, 255, 255, 0.95);}}
+    .reportview-container .main .block-container {{padding-top: 1rem; max-width: 100%;}}
     
-    .reportview-container .main .block-container {{
-        padding-top: 1rem;
-        max-width: 100%;
+    /* PGI SIMULATEUR */
+    .pgi-header {{
+        background-color: #E8F0FE;
+        border: 1px solid #1A73E8;
+        color: #1A73E8;
+        padding: 10px;
+        border-radius: 8px 8px 0 0;
+        font-weight: bold;
+        font-size: 14px;
+        margin-top: 10px;
+    }}
+    .pgi-container {{
+        border: 1px solid #E0E0E0;
+        border-top: none;
+        border-radius: 0 0 8px 8px;
+        padding: 10px;
+        margin-bottom: 20px;
+        background: #FAFAFA;
     }}
 
-    /* NAVBAR */
-    .navbar-container {{
-        display: flex;
-        align-items: center;
-        background-color: white;
-        padding: 10px 20px;
-        border-bottom: 1px solid #E0E0E0;
-        margin-bottom: 10px;
-        height: 80px;
-    }}
-
-    /* BOUTON PRIMAIRE */
+    /* BOUTONS */
     button[kind="primary"] {{
         background: linear-gradient(135deg, #0F9D58 0%, #00C9FF 100%);
         color: white !important;
         border: none;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-        width: 100%;
     }}
-
-    /* CHAT OPTIMISÉ */
+    
+    /* CHAT */
     [data-testid="stChatMessage"] {{
         padding: 1rem;
         border-radius: 12px;
         margin-bottom: 0.5rem;
     }}
-    [data-testid="stChatMessage"][data-testid="assistant"] {{
-        background-color: #FFFFFF;
-        border: 1px solid #E0E0E0;
-    }}
-    [data-testid="stChatMessage"][data-testid="user"] {{
-        background-color: #E3F2FD;
-        border: none;
-    }}
-    [data-testid="stChatMessageAvatar"] img {{
-        border-radius: 50%;
-        object-fit: cover;
-    }}
+    [data-testid="stChatMessage"][data-testid="assistant"] {{background-color: #FFFFFF; border: 1px solid #E0E0E0;}}
+    [data-testid="stChatMessage"][data-testid="user"] {{background-color: #E3F2FD; border: none;}}
+    [data-testid="stChatMessageAvatar"] img {{border-radius: 50%; object-fit: cover;}}
 
-    /* FOOTER */
     .fixed-footer {{
         position: fixed;
-        left: 0;
-        bottom: 0;
-        width: 100%;
-        background: #323232;
-        color: #FFF;
-        text-align: center;
-        padding: 6px;
-        font-size: 11px;
-        z-index: 99999;
+        left: 0; bottom: 0; width: 100%;
+        background: #323232; color: #FFF;
+        text-align: center; padding: 6px; font-size: 11px; z-index: 99999;
     }}
     [data-testid="stBottom"] {{ bottom: 30px !important; padding-bottom: 10px; }}
 </style>
@@ -208,86 +182,85 @@ def add_notification(msg):
     ts = datetime.now().strftime("%H:%M")
     st.session_state.notifications.insert(0, f"{ts} - {msg}")
 
-def log_interaction(student, role, content):
-    st.session_state.logs.append({
-        "Heure": datetime.now().strftime("%H:%M"),
-        "User": student, "Role": role, "Msg": content[:50]
-    })
+# --- 8. DONNÉES & PGI SIMULATEUR ---
+def generate_fake_pgi_data(mission_type):
+    """Génère des données fictives pour le PGI selon la mission"""
+    if "Recrutement" in mission_type or "RH" in mission_type:
+        return pd.DataFrame({
+            "Nom Candidat": ["Dubois", "Martin", "Kowalski", "Diallo"],
+            "Prénom": ["Marie", "Lucas", "Anna", "Seydou"],
+            "Diplôme": ["Bac Pro AGOrA", "BTS GPME", "CAP Vente", "Bac Pro Commerce"],
+            "Expérience": ["Débutant", "2 ans", "5 ans", "Débutant"],
+            "Statut": ["Reçu", "En attente", "Reçu", "Non retenu"]
+        })
+    elif "Vente" in mission_type or "Facturation" in mission_type:
+        return pd.DataFrame({
+            "Client": ["Garage Auto", "Mairie de Lyon", "Assoc. Sport", "Mme Dupont"],
+            "Réf. Commande": ["CMD-001", "CMD-002", "CMD-003", "CMD-004"],
+            "Montant HT": ["1500 €", "320 €", "45 €", "890 €"],
+            "État": ["Facturée", "En cours", "Livrée", "Impayé"]
+        })
+    else: # Stock / Général
+        return pd.DataFrame({
+            "Réf. Produit": ["PAP-A4", "STY-BL", "CART-EN", "CLA-USB"],
+            "Désignation": ["Papier A4 (500)", "Stylo Bleu", "Cartouche Encre", "Clé USB 32Go"],
+            "Stock Réel": [12, 50, 2, 5],
+            "Stock Alerte": [5, 20, 3, 2]
+        })
 
-# --- 8. DONNÉES MÉTIER ---
 DB_PREMIERE = {
     "RESSOURCES HUMAINES": {
         "Recrutement": {
             "competence": "COMPÉTENCE : Définir le Profil, Rédiger l'annonce, Sélectionner (Grille), Convoquer.",
             "procedure": """
-            PHASE 1 : Analyse du besoin (Tu donnes le contexte, l'élève doit lister les compétences clés).
-            PHASE 2 : Rédaction de l'annonce (L'élève doit rédiger le texte de l'offre).
-            PHASE 3 : Sélection (L'élève doit créer une grille d'évaluation avec des critères pondérés).
-            PHASE 4 : Convocation (L'élève doit rédiger le mail de convocation à l'entretien).
+            PHASE 1 : Analyse du besoin (Donne le contexte PME, l'élève doit lister 3 compétences clés).
+            PHASE 2 : Rédaction de l'annonce (L'élève doit rédiger le corps de l'annonce).
+            PHASE 3 : Sélection (Affiche le PGI Candidats, l'élève doit choisir 2 candidats à convoquer).
+            PHASE 4 : Convocation (L'élève rédige le mail).
             """,
             "doc": {
-                "type": "Contexte RH",
-                "titre": "Besoin en Recrutement",
-                "contexte": "Suite au départ de Mme Vasseur, nous devons recruter un(e) Assistant(e) Administratif(ve) polyvalent(e).",
-                "missions": ["Accueil physique/téléphonique", "Gestion du courrier", "Suivi des commandes fournitures"],
-                "profil": "Bac Pro AGOrA, maîtrise Excel, bon relationnel.",
-                "lien_titre": "Fiche Métier (ONISEP)",
+                "type": "Fiche Poste", "titre": "Assistant(e) Commercial(e)", 
+                "contexte": "Besoin urgent pour renforcer l'équipe.", 
+                "missions": ["Accueil", "Devis", "Relance"],
                 "lien_url": "https://www.onisep.fr/ressources/univers-metier/metiers/assistant-assistante-de-gestion-pme-pmi"
             }
         },
-        "Intégration": {
-            "competence": "COMPÉTENCE : Préparer l'arrivée, Livret d'accueil, Planning.",
-            "procedure": "1. Checklist avant arrivée (Matériel, Badges) -> 2. Conception du Livret d'accueil (Sommaire) -> 3. Planning de la première semaine."
-        },
-        "Administratif RH": {
-            "competence": "COMPÉTENCE : Contrat de travail, DPAE, Registre du personnel.",
-            "procedure": "1. Liste des documents à demander au salarié -> 2. Vérification des mentions obligatoires du contrat -> 3. Mise à jour du Registre Unique du Personnel."
-        }
-    },
-    "GESTION DES ESPACES": {
-        "Aménagement": {
-            "competence": "COMPÉTENCE : Ergonomie, Plan d'aménagement, Sécurité.",
-            "procedure": "1. Analyse des besoins (Espace, Lumière) -> 2. Choix du mobilier sur catalogue -> 3. Plan d'implantation."
-        },
-        "Numérique": {
-            "competence": "COMPÉTENCE : Gestion parc informatique, RGPD.",
-            "procedure": "1. Inventaire du matériel -> 2. Charte informatique -> 3. Vérification conformité RGPD."
-        }
+        "Intégration": {"competence": "COMPÉTENCE : Livret d'accueil, Parcours d'arrivée."},
+        "Administratif RH": {"competence": "COMPÉTENCE : Contrat, Registre personnel, Congés."}
     },
     "RELATIONS PARTENAIRES": {
         "Vente": {
-            "competence": "COMPÉTENCE : Devis, Négociation, Facturation.",
-            "procedure": "1. Prise de connaissance de la demande client -> 2. Établissement du Devis -> 3. Traitement de la commande -> 4. Facturation."
+            "competence": "COMPÉTENCE : Devis, Facturation.",
+            "procedure": "1. Devis -> 2. Commande -> 3. Facture -> 4. Relance."
         },
-        "Réunions": {
-            "competence": "COMPÉTENCE : Ordre du jour, Réservation, Compte-Rendu.",
-            "procedure": "1. Définition Ordre du jour -> 2. Invitation/Convocation -> 3. Réservation salle/matériel -> 4. Prise de note et CR."
-        }
+        "Déplacements": {"competence": "COMPÉTENCE : Réservation Train/Hôtel."}
     }
 }
 
-# --- 9. IA (PROMPT EXPERT) ---
+# --- 9. IA (PROMPT "INSPECTEUR") ---
 SYSTEM_PROMPT = """
-RÔLE : Tu es le Tuteur de stage de l'élève (Bac Pro AGOrA).
-TON : Professionnel, directif, pédagogique.
-OBJECTIF : Faire réaliser des TÂCHES PROFESSIONNELLES concrètes à l'élève.
+RÔLE : Tu es le Tuteur de stage (Professionnel exigeant).
+MISSION : Guider l'élève vers la certification Bac Pro AGOrA.
 
-RÈGLES D'OR :
-1. NE POSE PAS DE QUESTIONS DE COURS ("C'est quoi un devis ?"). DEMANDE DE FAIRE ("Fais le devis").
-2. SUIS LA PROCÉDURE : Tu as une procédure étape par étape. Ne passe pas à l'étape 2 tant que l'étape 1 n'est pas validée.
-3. EXIGENCE : Vérifie la qualité du travail (Orthographe, Formules de politesse, Mentions obligatoires). Si c'est incomplet, demande de corriger.
-4. AIDE : Si l'élève bloque, donne un exemple ou une structure à trous, mais ne fais pas à sa place.
+CRITÈRES D'ÉVALUATION (À GARDER EN TÊTE) :
+- Rigueur (Pas de fautes, données exactes).
+- Professionnalisme (Ton adapté, vouvoiement).
+- Utilisation des outils (L'élève utilise-t-il les données du PGI fourni ?).
 
-SÉCURITÉ : Si l'élève utilise des vrais noms -> STOP.
+CONSIGNES :
+1. NE FAIS PAS À LA PLACE DE L'ÉLÈVE.
+2. Si l'élève répond, valide ou corrige selon les critères : "Novice" (Trop vague), "Maîtrise" (Correct), "Expertise" (Parfait).
+3. Utilise les données du PGI virtuel affiché à l'écran pour tes questions (ex: "Quel candidat as-tu retenu dans la liste ?").
+4. Ajoute "📎 Source : [Nom]" pour les règles métier.
+
+SÉCURITÉ : Données réelles -> STOP.
 """
 
 INITIAL_MESSAGE = """
 👋 **Bonjour.**
 
 Bienvenue à l'Agence **Pro'AGOrA**.
-Je suis votre tuteur.
-
-Veuillez sélectionner votre **Mission** dans le menu de gauche pour démarrer le stage.
+Veuillez lancer votre mission via le menu.
 """
 
 if not st.session_state.messages:
@@ -301,45 +274,59 @@ def lancer_mission(prenom):
     
     if isinstance(data, str):
         competence = data
-        procedure = "Suivre la procédure standard AGOrA."
+        procedure = "Standard"
         st.session_state.current_context_doc = None
     else:
         competence = data.get("competence", "")
-        procedure = data.get("procedure", "Procédure standard.")
+        procedure = data.get("procedure", "Standard")
         st.session_state.current_context_doc = data.get("doc", None)
 
+    # Génération du PGI
+    st.session_state.pgi_data = generate_fake_pgi_data(st.session_state.dossier)
+    
     st.session_state.messages = []
     
     contexte_ia = ""
     if st.session_state.current_context_doc:
         doc = st.session_state.current_context_doc
-        contexte_ia = f"""
-        DOCUMENTS FOURNIS :
-        - Titre poste : {doc['titre']}
-        - Missions : {', '.join(doc.get('missions', []))}
-        """
+        contexte_ia = f"DOCUMENTS : Poste {doc['titre']} - Missions : {', '.join(doc.get('missions', []))}"
 
     prompt = f"""
-    NOUVELLE SESSION DE STAGE.
-    STAGIAIRE : {prenom}
-    CONTEXTE : {lieu} situé à {ville}.
-    MISSION : {st.session_state.dossier}
-    PROCÉDURE OBLIGATOIRE À SUIVRE : 
-    {procedure}
-    
+    DÉMARRAGE STAGE : Élève {prenom}.
+    LIEU : {lieu} à {ville}.
+    MISSION : {st.session_state.dossier}.
+    PROCÉDURE : {procedure}.
     {contexte_ia}
     
-    CONSIGNE POUR L'IA :
-    1. Accueille le stagiaire en lui présentant l'entreprise ({lieu} à {ville}).
-    2. Donne-lui sa première tâche concrète (PHASE 1 de la procédure).
-    3. Sois précis : dis-lui exactement ce qu'il doit produire (une liste, un mail, un tableau ?).
+    ACTION :
+    1. Accueille l'élève en tant que tuteur dans cette structure précise.
+    2. Donne la situation pro.
+    3. Donne la 1ère tâche.
     """
     
     msgs = [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}]
     with st.spinner("Préparation du dossier..."):
         resp, _ = query_groq_with_rotation(msgs)
         st.session_state.messages.append({"role": "assistant", "content": resp})
-    add_notification(f"Mission lancée : {st.session_state.dossier} ({ville})")
+    add_notification(f"Mission lancée : {st.session_state.dossier}")
+
+def generer_bilan_competences():
+    """Génère un résumé pour la fiche CCF"""
+    history = [m["content"] for m in st.session_state.messages if m["role"] == "user"]
+    full_text = "\n".join(history[-10:]) # Analyse les 10 derniers échanges
+    
+    prompt_bilan = f"""
+    Analyse ce travail d'élève :
+    {full_text}
+    
+    Génère un 'Bilan pour Fiche CCF' court :
+    1. Contexte (1 phrase).
+    2. Activités réalisées.
+    3. Outils mobilisés.
+    4. Niveau estimé (Novice/Fonctionnel/Maîtrise).
+    """
+    msgs = [{"role": "system", "content": "Tu es un évaluateur."}, {"role": "user", "content": prompt_bilan}]
+    return query_groq_with_rotation(msgs)[0]
 
 # --- 10. INTERFACE ---
 
@@ -354,14 +341,11 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # --- ZONE GAMIFICATION (XP) ---
+    # XP & GAMIFICATION
     st.markdown(f"### 🏆 {st.session_state.grade}")
-    # Barre de progression (XP / 1000 max pour l'exemple)
-    progress_val = min(st.session_state.xp / 1000, 1.0)
-    st.progress(progress_val)
-    st.caption(f"XP Total : {st.session_state.xp} pts")
+    st.progress(min(st.session_state.xp / 1000, 1.0))
+    st.caption(f"XP : {st.session_state.xp}")
     
-    # Identité
     student_name = st.text_input("Prénom", placeholder="Ex: Camille")
     user_label = f"👤 {student_name}" if student_name else "👤 Invité"
     
@@ -369,69 +353,59 @@ with st.sidebar:
     st.session_state.theme = st.selectbox("Thème", list(DB_PREMIERE.keys()))
     st.session_state.dossier = st.selectbox("Dossier", list(DB_PREMIERE[st.session_state.theme].keys()))
     
-    # Boutons Lancement et Validation
-    col_launch, col_valid = st.columns([1.5, 1])
-    with col_launch:
-        if st.button("LANCER", type="primary"):
-            if student_name:
-                lancer_mission(student_name)
-                st.rerun()
-            else:
-                st.warning("Prénom requis")
-    
-    with col_valid:
-        # Bouton pour valider une étape et gagner des points manuellement
-        if st.button("✅ ÉTAPE", help="Clique ici quand tu as validé une étape avec le tuteur"):
-            update_xp(10)
+    if st.button("LANCER", type="primary"):
+        if student_name:
+            lancer_mission(student_name)
             st.rerun()
-
-    # Options & Sauvegarde
-    with st.expander("🛠️ Options"):
-        st.checkbox("Mode DYS", key="mode_dys")
-        st.checkbox("Audio", key="mode_audio")
-        st.checkbox("Simplifié", key="mode_simple")
-        
-    st.markdown("---")
+        else:
+            st.warning("Prénom requis")
     
+    if st.button("✅ ÉTAPE VALIDÉE"):
+        update_xp(10)
+        st.rerun()
+
+    # OUTILS FICHIER
+    st.markdown("---")
     uploaded_file = st.file_uploader("Rendre un travail", type=['docx'])
     if uploaded_file and student_name:
-        if st.button("Envoyer à la correction"):
+        if st.button("Envoyer"):
             txt = extract_text_from_docx(uploaded_file)
             st.session_state.messages.append({"role": "user", "content": f"PROPOSITION : {txt}"})
-            update_xp(20) # Récompense pour travail rendu
+            update_xp(20)
             st.rerun()
             
-    # Bouton Sauvegarde (Toujours visible)
+    # BILAN CCF (NOUVEAU)
+    if st.button("📝 Générer Bilan CCF"):
+        if len(st.session_state.messages) > 2:
+            bilan = generer_bilan_competences()
+            st.session_state.messages.append({"role": "assistant", "content": f"**BILAN AUTOMATIQUE :**\n\n{bilan}"})
+            st.rerun()
+        else:
+            st.warning("Travaillez d'abord !")
+
+    # SAUVEGARDE
+    st.markdown("---")
     if len(st.session_state.messages) > 0:
         chat_df = pd.DataFrame(st.session_state.messages)
         csv_data = chat_df.to_csv(index=False).encode('utf-8')
-        file_name = f"agora_{student_name}_{datetime.now().strftime('%H%M')}.csv"
-        
-        st.download_button(
-            label="💾 Sauvegarder",
-            data=csv_data,
-            file_name=file_name,
-            mime="text/csv",
-            help="Télécharge ta conversation pour le dossier CCF"
-        )
-    else:
-        st.button("💾 Sauvegarder", disabled=True) # Bouton grisé si vide
+        st.download_button("💾 Sauvegarder", csv_data, "agora_save.csv", "text/csv")
     
     if st.button("🗑️ Reset"):
         st.session_state.messages = [{"role": "assistant", "content": INITIAL_MESSAGE}]
+        st.session_state.pgi_data = None
         st.session_state.current_context_doc = None
         st.rerun()
 
 # --- HEADER ---
 c1, c2, c3, c4, c5 = st.columns([3, 1, 1, 1, 1])
-
 with c1:
     logo_html = ""
     if os.path.exists(LOGO_AGORA):
         b64 = img_to_base64(LOGO_AGORA)
         logo_html = f'<img src="data:image/png;base64,{b64}" style="height:45px; vertical-align:middle; margin-right:10px;">'
-    st.markdown(f"""<div style="display:flex; align-items:center;">{logo_html}<div><div style="font-size:24px; font-weight:bold; color:#202124; line-height:1.2;">Agence Pro'AGOrA</div><div style="font-size:12px; color:#5F6368;">Superviseur IA v2.3 (Gamifiée)</div></div></div>""", unsafe_allow_html=True)
+    st.markdown(f"""<div style="display:flex; align-items:center;">{logo_html}<div><div style="font-size:24px; font-weight:bold; color:#202124; line-height:1.2;">Agence Pro'AGOrA</div><div style="font-size:12px; color:#5F6368;">Superviseur IA v3.0 (Expert)</div></div></div>""", unsafe_allow_html=True)
 
+# BOUTONS RESSOURCES
 with c2:
     if st.session_state.get("current_context_doc"):
         doc = st.session_state.current_context_doc
@@ -440,13 +414,10 @@ with c2:
             st.info(doc.get('contexte', ''))
             st.markdown("**Missions :**")
             for m in doc.get('missions', []): st.markdown(f"- {m}")
-            st.markdown("---")
-            if 'lien_url' in doc: st.link_button(doc.get('lien_titre', 'En savoir plus'), doc['lien_url'])
+            if 'lien_url' in doc: st.link_button("Fiche Métier", doc['lien_url'])
 
 with c3:
     with st.popover("ℹ️ Métiers", use_container_width=True):
-        st.markdown("**👩‍💼 Assistant(e) Gestion**\n*Administratif, accueil.*")
-        st.markdown("**👥 Assistant(e) RH**\n*Contrats, paie.*")
         st.link_button("🔗 ONISEP", "https://www.onisep.fr/metiers")
 
 with c4:
@@ -457,6 +428,12 @@ with c5:
     st.button(f"👤", help=user_label, disabled=True, use_container_width=True)
 
 st.markdown("<hr style='margin: 0 0 20px 0;'>", unsafe_allow_html=True)
+
+# --- SIMULATEUR PGI (NOUVEAU) ---
+if st.session_state.pgi_data is not None:
+    st.markdown('<div class="pgi-header">🖥️ PGI - Espace de Gestion (Données Entreprise)</div>', unsafe_allow_html=True)
+    with st.expander("Voir les données (Clients / Stocks / RH)", expanded=True):
+        st.dataframe(st.session_state.pgi_data, use_container_width=True)
 
 # --- CHAT ---
 for i, msg in enumerate(st.session_state.messages):
@@ -474,7 +451,7 @@ for i, msg in enumerate(st.session_state.messages):
 
 st.markdown("<br><br>", unsafe_allow_html=True)
 
-# --- FOOTER & INPUT ---
+# --- INPUT ---
 st.markdown('<div class="fixed-footer">Agence Pro\'AGOrA - Données Fictives Uniquement</div>', unsafe_allow_html=True)
 
 if user_input := st.chat_input("Votre réponse..."):
@@ -489,11 +466,14 @@ if st.session_state.messages[-1]["role"] == "user":
         with st.spinner("Analyse..."):
             sys = SYSTEM_PROMPT
             if st.session_state.get("current_context_doc"):
-                sys += f"\nCONTEXTE MISSION : {st.session_state.current_context_doc['titre']}."
+                sys += f"\nCONTEXTE : {st.session_state.current_context_doc['titre']}."
+            
+            # Injection des données PGI dans le prompt pour que l'IA sache de quoi on parle
+            if st.session_state.pgi_data is not None:
+                sys += f"\nDONNÉES PGI DISPONIBLES : {st.session_state.pgi_data.to_string()}"
 
             msgs = [{"role": "system", "content": sys}] + st.session_state.messages[-6:]
             resp, _ = query_groq_with_rotation(msgs)
             if not resp: resp = "Erreur technique."
             st.markdown(resp)
             st.session_state.messages.append({"role": "assistant", "content": resp})
-            # Pas de rerun auto pour l'audio ici, l'élève clique s'il veut écouter
