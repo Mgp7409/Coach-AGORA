@@ -31,46 +31,18 @@ st.set_page_config(
     initial_sidebar_state="auto"
 )
 
-# --- 2. GESTION ÉTAT (XP & MESSAGES) ---
+# --- 2. GESTION ÉTAT ---
 if "messages" not in st.session_state: st.session_state.messages = []
 if "logs" not in st.session_state: st.session_state.logs = []
 if "notifications" not in st.session_state: st.session_state.notifications = ["Bienvenue."]
 if "current_context_doc" not in st.session_state: st.session_state.current_context_doc = None
 
-# GAMIFICATION (XP)
-if "xp" not in st.session_state: st.session_state.xp = 0
-if "grade" not in st.session_state: st.session_state.grade = "Stagiaire"
-
-# --- 3. OUTILS & VARIABLES ---
+# --- 3. OUTILS IMAGE ---
 def img_to_base64(img_path):
     if os.path.exists(img_path):
         with open(img_path, "rb") as f:
             return base64.b64encode(f.read()).decode()
     return ""
-
-# Listes pour la diversification
-TYPES_ORGA = ["Mairie", "Hôpital", "Association Sportive", "Garage Automobile", "Cabinet d'Architecte", "Entreprise de BTP", "Supermarché", "Office de Tourisme"]
-VILLES = ["Lyon", "Bordeaux", "Lille", "Nantes", "Strasbourg", "Toulouse", "Marseille", "Petit Village"]
-
-# Grades
-GRADES = {
-    0: "👶 Stagiaire",
-    100: "👦 Assistant(e) Junior",
-    300: "👨‍💼 Assistant(e) Confirmé(e)",
-    600: "👩‍💻 Responsable de Pôle",
-    1000: "👑 Directeur(trice)"
-}
-
-def update_grade():
-    for score, titre in GRADES.items():
-        if st.session_state.xp >= score:
-            st.session_state.grade = titre
-
-def ajouter_xp(points):
-    st.session_state.xp += points
-    update_grade()
-    st.toast(f"Bravo ! +{points} XP", icon="⭐")
-    st.balloons()
 
 # --- 4. STYLE & CSS ---
 is_dys = st.session_state.get("mode_dys", False)
@@ -201,22 +173,27 @@ def log_interaction(student, role, content):
         "User": student, "Role": role, "Msg": content[:50]
     })
 
-# --- 7. DONNÉES MÉTIER ---
+# --- 7. DONNÉES MÉTIER (CORRIGÉES AVEC PROCÉDURES) ---
+# J'ai ajouté un champ "procedure" pour guider l'IA
 DB_PREMIERE = {
     "RESSOURCES HUMAINES": {
         "Recrutement": {
-            "competence": "COMPÉTENCE : Définir le Profil de poste, Rédiger l'annonce d'embauche, Trier des CV.",
+            "competence": "COMPÉTENCE : Définir le Profil, Rédiger l'annonce, Sélectionner (Grille), Convoquer.",
+            "procedure": "1. Analyse du besoin (Fiche de poste) -> 2. Choix des canaux de diffusion -> 3. Création de la Grille de sélection -> 4. Rédaction du Mail de convocation.",
             "doc": {
                 "type": "Fiche de Poste",
                 "titre": "Assistant(e) Commercial(e) (H/F)",
-                "contexte": "PME en pleine croissance.",
-                "missions": ["Accueil clients.", "Suivi des devis.", "Relance impayés."],
-                "profil": "Bac Pro AGOrA, organisé(e), bon relationnel.",
-                "lien_titre": "Fiche métier (ONISEP)",
+                "contexte": "Garage 'AutoPlus' (Lyon), 15 salariés. Besoin urgent suite à un départ.",
+                "missions": ["Accueil client", "Facturation", "Gestion planning atelier"],
+                "profil": "Bac Pro, bon contact, rigoureux.",
+                "lien_titre": "Fiche Métier (ONISEP)",
                 "lien_url": "https://www.onisep.fr/ressources/univers-metier/metiers/assistant-assistante-commercial-commerciale"
             }
         },
-        "Intégration": {"competence": "COMPÉTENCE : Livret d'accueil, Parcours d'arrivée."},
+        "Intégration": {
+            "competence": "COMPÉTENCE : Livret d'accueil, Parcours d'arrivée.",
+            "procedure": "1. Préparation du poste de travail -> 2. Kit d'accueil -> 3. Planning de la 1ère journée."
+        },
         "Administratif RH": {"competence": "COMPÉTENCE : Contrat, Registre personnel, Congés."}
     },
     "GESTION DES ESPACES": {
@@ -231,23 +208,22 @@ DB_PREMIERE = {
     }
 }
 
-# --- 8. IA (PROMPT STRUCTURÉ ET SIMPLIFIÉ) ---
+# --- 8. IA (PROMPT EXPERT BAC PRO) ---
 SYSTEM_PROMPT = """
 RÔLE : Tu es le Superviseur Virtuel de l'Agence Pro'AGOrA.
-TON : Professionnel, encourageant et clair.
-MISSION : Guider l'élève (Bac Pro) pas à pas.
+TON : Professionnel, directif mais bienveillant.
+MISSION : Guider l'élève dans la réalisation de tâches professionnelles CONCRÈTES.
 
-RÈGLES D'OR :
-1. ÉTAPE PAR ÉTAPE : Ne donne JAMAIS toutes les instructions en même temps. Une seule tâche à la fois.
-2. SIMPLICITÉ : Utilise des phrases courtes. Fais des listes à puces.
-3. SOURCES : Ajoute "📎 Source : [Nom]" si tu donnes une info technique.
-4. AIDE : Si l'élève est bloqué, donne un exemple concret (mais fictif).
+⛔ CE QUE TU NE DOIS PAS FAIRE :
+- Ne pose pas de questions de cours théoriques ("C'est quoi le recrutement ?").
+- Ne demande pas à l'élève d'inventer des choses qu'il ne sait pas.
 
-STRUCTURE DE TA PREMIÈRE RÉPONSE :
-1. Salue l'élève.
-2. Présente le Contexte (Lieu + Ville).
-3. Donne la Mission globale en 1 phrase.
-4. Donne la PREMIÈRE petite tâche à faire.
+✅ CE QUE TU DOIS FAIRE :
+1. DONNER LE CADRE : Au début, donne toujours le contexte précis (Entreprise, Ville, Problème à résoudre).
+2. SUIVRE LA PROCÉDURE : Guide l'élève étape par étape selon le référentiel Bac Pro AGOrA.
+   - Ex pour Recrutement : D'abord on valide le profil, ensuite on fait la grille, enfin on convoque.
+3. DEMANDER DES ÉCRITS PROS : Demande à l'élève de rédiger le mail, de lister les critères de la grille, ou de rédiger l'annonce.
+4. SOURCES : Ajoute "📎 Source : [Nom]" pour les notions clés.
 
 SÉCURITÉ : Données réelles -> STOP.
 """
@@ -263,17 +239,16 @@ if not st.session_state.messages:
     st.session_state.messages.append({"role": "assistant", "content": INITIAL_MESSAGE})
 
 def lancer_mission(prenom):
+    # Récupération Données
     data = DB_PREMIERE[st.session_state.theme][st.session_state.dossier]
-    
-    # Diversification aléatoire
-    lieu = random.choice(TYPES_ORGA)
-    ville = random.choice(VILLES)
     
     if isinstance(data, str):
         competence = data
+        procedure = "Suivre la procédure standard AGOrA."
         st.session_state.current_context_doc = None
     else:
         competence = data.get("competence", "")
+        procedure = data.get("procedure", "Procédure standard.")
         st.session_state.current_context_doc = data.get("doc", None)
 
     st.session_state.messages = []
@@ -281,22 +256,27 @@ def lancer_mission(prenom):
     contexte_ia = ""
     if st.session_state.current_context_doc:
         doc = st.session_state.current_context_doc
-        contexte_ia = f"CONTEXTE SPÉCIFIQUE : Recrutement pour le poste de {doc['titre']}."
+        contexte_ia = f"""
+        CONTEXTE SCÉNARIO :
+        - Entreprise : {doc.get('contexte', 'PME locale')}
+        - Poste concerné : {doc['titre']}
+        - Missions du poste : {', '.join(doc.get('missions', []))}
+        """
 
     prompt = f"""
-    CONTEXTE GÉNÉRAL : L'élève {prenom} est en stage (virtuel) dans une structure de type {lieu} située à {ville}.
-    MISSION CHOISIE : '{st.session_state.dossier}'.
-    COMPÉTENCE VISÉE : {competence}
+    DÉMARRAGE MISSION pour l'élève {prenom}.
+    DOSSIER : '{st.session_state.dossier}'.
+    PROCÉDURE À SUIVRE : {procedure}
     {contexte_ia}
     
-    ACTION :
-    1. Accueille l'élève en lui donnant son cadre de travail ({lieu} à {ville}).
-    2. Explique la mission simplement.
-    3. Donne la PREMIÈRE instruction (très simple) pour commencer.
+    ACTION ATTENDUE :
+    1. Accueille l'élève en tant que Responsable du service.
+    2. Donne-lui le contexte précis (Lieu, Entreprise).
+    3. Donne la PREMIÈRE consigne concrète (ex: "Prends connaissance de la fiche de poste ci-jointe et liste-moi les 3 critères impératifs pour la grille de sélection").
     """
     
     msgs = [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}]
-    with st.spinner("Génération de la mission..."):
+    with st.spinner("Préparation du dossier..."):
         resp, _ = query_groq_with_rotation(msgs)
         st.session_state.messages.append({"role": "assistant", "content": resp})
     add_notification(f"Mission lancée : {st.session_state.dossier}")
@@ -314,13 +294,7 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # GAMIFICATION
-    st.markdown(f"### 🏆 Niveau : {st.session_state.grade}")
-    st.progress(min(st.session_state.xp / 1000, 1.0))
-    st.caption(f"XP Total : {st.session_state.xp} pts")
-    
-    st.markdown("---")
-    
+    # GAMIFICATION & IDENTITÉ
     student_name = st.text_input("Prénom", placeholder="Ex: Camille")
     user_label = f"👤 {student_name}" if student_name else "👤 Invité"
     
@@ -328,34 +302,34 @@ with st.sidebar:
     st.session_state.theme = st.selectbox("Thème", list(DB_PREMIERE.keys()))
     st.session_state.dossier = st.selectbox("Dossier", list(DB_PREMIERE[st.session_state.theme].keys()))
     
-    col_start, col_xp = st.columns([2, 1])
-    with col_start:
-        if st.button("LANCER", type="primary"):
-            if student_name:
-                lancer_mission(student_name)
-                st.rerun()
-            else:
-                st.warning("Prénom ?")
-    with col_xp:
-        if st.button("VALIDER"):
-            ajouter_xp(50)
+    if st.button("LANCER LA MISSION", type="primary"):
+        if student_name:
+            lancer_mission(student_name)
             st.rerun()
-            
-    with st.expander("🛠️ Options"):
-        st.checkbox("Mode DYS", key="mode_dys")
-        st.checkbox("Audio", key="mode_audio")
-        st.checkbox("Simplifié", key="mode_simple")
-        
-    uploaded_file = st.file_uploader("Rendre un travail (.docx)", type=['docx'])
-    if uploaded_file and student_name:
-        if st.button("Envoyer à la correction"):
-            txt = extract_text_from_docx(uploaded_file)
-            st.session_state.messages.append({"role": "user", "content": f"PROPOSITION : {txt}"})
-            add_notification(f"Fichier envoyé : {uploaded_file.name}")
-            ajouter_xp(20) # XP Bonus pour envoi de fichier
-            st.rerun()
-    
+        else:
+            st.warning("Prénom requis")
+
+    # BOUTON SAUVEGARDE (TOUJOURS VISIBLE MAIS GRISE SI VIDE)
     st.markdown("---")
+    csv_data = ""
+    disabled_save = True
+    if len(st.session_state.messages) > 1:
+        chat_df = pd.DataFrame(st.session_state.messages)
+        csv_data = chat_df.to_csv(index=False).encode('utf-8')
+        disabled_save = False
+        
+    date_str = datetime.now().strftime("%d%m_%H%M")
+    file_name = f"agora_{student_name}_{date_str}.csv"
+    
+    st.download_button(
+        label="💾 Sauvegarder mon travail",
+        data=csv_data,
+        file_name=file_name,
+        mime="text/csv",
+        disabled=disabled_save,
+        help="Enregistre la conversation pour la montrer au prof."
+    )
+    
     if st.button("🗑️ Reset"):
         st.session_state.messages = [{"role": "assistant", "content": INITIAL_MESSAGE}]
         st.session_state.current_context_doc = None
@@ -369,7 +343,7 @@ with c1:
     if os.path.exists(LOGO_AGORA):
         b64 = img_to_base64(LOGO_AGORA)
         logo_html = f'<img src="data:image/png;base64,{b64}" style="height:45px; vertical-align:middle; margin-right:10px;">'
-    st.markdown(f"""<div style="display:flex; align-items:center;">{logo_html}<div><div style="font-size:24px; font-weight:bold; color:#202124; line-height:1.2;">Agence Pro'AGOrA</div><div style="font-size:12px; color:#5F6368;">Superviseur IA v2.1</div></div></div>""", unsafe_allow_html=True)
+    st.markdown(f"""<div style="display:flex; align-items:center;">{logo_html}<div><div style="font-size:24px; font-weight:bold; color:#202124; line-height:1.2;">Agence Pro'AGOrA</div><div style="font-size:12px; color:#5F6368;">Superviseur IA v2.2</div></div></div>""", unsafe_allow_html=True)
 
 with c2:
     if st.session_state.get("current_context_doc"):
@@ -402,17 +376,15 @@ for i, msg in enumerate(st.session_state.messages):
     avatar = BOT_AVATAR if msg["role"] == "assistant" else "🧑‍🎓"
     with st.chat_message(msg["role"], avatar=avatar):
         st.markdown(msg["content"])
-        if st.session_state.get("mode_audio") and msg["role"] == "assistant" and HAS_AUDIO:
-            key = f"aud_{i}"
-            if key not in st.session_state:
+        if msg["role"] == "assistant" and HAS_AUDIO:
+            # Petit bouton audio discret sous chaque message assistant
+            if st.button("🔊", key=f"tts_{i}", help="Lire ce message"):
                 try:
                     tts = gTTS(clean_text_for_audio(msg["content"]), lang='fr')
                     buf = BytesIO()
                     tts.write_to_fp(buf)
-                    st.session_state[key] = buf
-                except: pass
-            if key in st.session_state:
-                st.audio(st.session_state[key], format="audio/mp3")
+                    st.audio(buf, format="audio/mp3", start_time=0)
+                except: st.warning("Audio indisponible")
 
 st.markdown("<br><br>", unsafe_allow_html=True)
 
@@ -430,7 +402,6 @@ if st.session_state.messages[-1]["role"] == "user":
     with st.chat_message("assistant", avatar=BOT_AVATAR):
         with st.spinner("Analyse..."):
             sys = SYSTEM_PROMPT
-            if st.session_state.get("mode_simple"): sys += " UTILISE DES MOTS SIMPLES. FAIS DES LISTES."
             if st.session_state.get("current_context_doc"):
                 sys += f"\nCONTEXTE MISSION : {st.session_state.current_context_doc['titre']}."
 
@@ -439,4 +410,4 @@ if st.session_state.messages[-1]["role"] == "user":
             if not resp: resp = "Erreur technique."
             st.markdown(resp)
             st.session_state.messages.append({"role": "assistant", "content": resp})
-            if st.session_state.get("mode_audio"): st.rerun()
+            # Pas de rerun auto pour l'audio ici, l'élève clique s'il veut écouter
