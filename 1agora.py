@@ -64,14 +64,34 @@ def update_xp(amount):
     else:
         st.toast(f"+{amount} XP", icon="⭐")
 
-# --- 3. LISTES DE DONNÉES (POUR GÉNÉRATION ALÉATOIRE) ---
-VILLES_FRANCE = ["Lyon", "Bordeaux", "Lille", "Nantes", "Strasbourg", "Toulouse", "Marseille", "Nice", "Rennes", "Dijon", "Brest", "Tours", "Grenoble", "Annecy", "Rouen"]
-TYPES_ORGANISATIONS = ["Mairie", "Clinique", "Garage", "Association", "PME BTP", "Agence Immo", "Supermarché", "Cabinet Comptable", "Lycée", "EHPAD"]
+# --- 3. BASES DE DONNÉES ÉTENDUES (ANTI-RÉPÉTITION) ---
+VILLES_FRANCE = [
+    "Lyon", "Bordeaux", "Lille", "Nantes", "Strasbourg", "Toulouse", "Marseille", "Nice", "Rennes", 
+    "Montpellier", "Grenoble", "Dijon", "Angers", "Nîmes", "Saint-Étienne", "Clermont-Ferrand", 
+    "Le Havre", "Tours", "Limoges", "Brest", "Metz", "Besançon", "Perpignan", "Orléans", "Mulhouse",
+    "Caen", "Nancy", "Argenteuil", "Rouen", "Montreuil"
+]
 
-NOMS = ["Martin", "Bernard", "Thomas", "Petit", "Robert", "Richard", "Durand", "Dubois", "Moreau", "Laurent", "Simon", "Michel", "Lefebvre", "Leroy", "Roux", "David", "Bertrand", "Morel", "Fournier", "Girard"]
-PRENOMS = ["Emma", "Gabriel", "Léo", "Louise", "Raphaël", "Jade", "Louis", "Ambre", "Lucas", "Arthur", "Jules", "Mila", "Adam", "Alice", "Liam", "Lina", "Sacha", "Chloé", "Hugo", "Léa"]
-DIPLOMES = ["Bac Pro AGOrA", "BTS GPME", "BTS SAM", "CAP Employé de Vente", "Bac Pro Commerce", "Licence Pro RH", "Aucun diplôme", "Bac Général"]
-COMPETENCES_CLE = ["Anglais B2", "Excel Expert", "Permis B", "Logiciel EBP", "Accueil physique", "Comptabilité base", "Réseaux sociaux"]
+TYPES_ORGANISATIONS = [
+    "Mairie (Service Technique)", "Clinique Privée", "Garage Automobile", "Association d'Aide", 
+    "PME BTP", "Agence Immobilière", "Cabinet d'Architecte", "Grande Surface", "Entreprise de Transport", 
+    "Office de Tourisme", "EHPAD", "Lycée Professionnel", "Cabinet Comptable", "Start-up Tech", 
+    "Coopérative Agricole"
+]
+
+NOMS = [
+    "Martin", "Bernard", "Thomas", "Petit", "Robert", "Richard", "Durand", "Dubois", "Moreau", "Laurent", 
+    "Simon", "Michel", "Lefebvre", "Leroy", "Roux", "David", "Bertrand", "Morel", "Fournier", "Girard",
+    "Bonnet", "Dupont", "Lambert", "Fontaine", "Rousseau", "Vincent", "Muller", "Lefevre", "Faure", "Andre",
+    "Mercier", "Blanc", "Guerin", "Boyer", "Garnier", "Chevalier", "Francois", "Legrand", "Gauthier", "Garcia"
+]
+
+PRENOMS = [
+    "Emma", "Gabriel", "Léo", "Louise", "Raphaël", "Jade", "Louis", "Ambre", "Lucas", "Arthur", 
+    "Jules", "Mila", "Adam", "Alice", "Liam", "Lina", "Sacha", "Chloé", "Hugo", "Léa",
+    "Tiago", "Elena", "Mohamed", "Inès", "Noah", "Sarah", "Maël", "Zoé", "Ethan", "Anna",
+    "Paul", "Eva", "Nathan", "Manon", "Tom", "Camille", "Aaron", "Lola", "Théo", "Lucie"
+]
 
 # --- 4. OUTILS IMAGE ---
 def img_to_base64(img_path):
@@ -97,7 +117,7 @@ st.markdown(f"""
     [data-testid="stHeader"] {{background-color: rgba(255, 255, 255, 0.95);}}
     .reportview-container .main .block-container {{padding-top: 1rem; max-width: 100%;}}
     
-    /* PGI SIMULATEUR */
+    /* PGI STYLE */
     .pgi-header {{
         background-color: #E8F0FE;
         border: 1px solid #1A73E8;
@@ -179,106 +199,150 @@ def add_notification(msg):
     ts = datetime.now().strftime("%H:%M")
     st.session_state.notifications.insert(0, f"{ts} - {msg}")
 
-# --- 8. GÉNÉRATEUR PGI DYNAMIQUE ---
-def generate_fake_pgi_data(mission_type):
-    """Génère des données fictives aléatoires à chaque appel"""
+# --- 8. GÉNÉRATEUR PGI (LOGIQUE STRICTE) ---
+def generate_fake_pgi_data(theme, mission):
     rows = []
     
-    if "Recrutement" in mission_type or "RH" in mission_type:
-        for _ in range(6): # 6 candidats aléatoires
-            nom = random.choice(NOMS).upper()
-            prenom = random.choice(PRENOMS)
-            diplome = random.choice(DIPLOMES)
-            exp = f"{random.randint(0, 10)} ans"
-            atout = random.choice(COMPETENCES_CLE)
-            rows.append({
-                "Nom": nom, "Prénom": prenom, 
-                "Diplôme": diplome, "Expérience": exp, 
-                "Atout Clé": atout, "Statut": "À étudier" # Statut neutre pour obliger l'élève à choisir
-            })
-        return pd.DataFrame(rows)
-        
-    elif "Vente" in mission_type or "Facturation" in mission_type:
-        etats = ["Devis envoyé", "Commande reçue", "À facturer", "Relance J+1"]
-        for i in range(1, 7):
-            client = f"{random.choice(['Garage', 'Mairie', 'Société', 'M.'])} {random.choice(NOMS)}"
-            rows.append({
-                "N° Pièce": f"V-{2024000+i}",
-                "Client": client,
-                "Date": f"{random.randint(1,28)}/10/2024",
-                "Montant TTC": f"{random.randint(50, 2000)} €",
-                "État": random.choice(etats)
-            })
-        return pd.DataFrame(rows)
-        
-    else: # Stock / Matériel
-        produits = ["Papier A4", "Classeurs", "Stylos", "Cartouches", "PC Portable", "Écran 24p", "Clavier"]
-        for prod in produits:
-            rows.append({
-                "Réf": f"ART-{random.randint(100,999)}",
-                "Désignation": prod,
-                "Stock Réel": random.randint(0, 50),
-                "Stock Alerte": 5,
-                "Besoin Réassort": "NON" if random.randint(0,1) else "OUI"
-            })
-        return pd.DataFrame(rows)
+    # 1. RESSOURCES HUMAINES (Candidats ou Salariés)
+    if theme == "RESSOURCES HUMAINES":
+        if "Recrutement" in mission:
+            for _ in range(5):
+                rows.append({
+                    "Nom": random.choice(NOMS).upper(),
+                    "Prénom": random.choice(PRENOMS),
+                    "Diplôme": random.choice(["Bac Pro AGOrA", "BTS SAM", "CAP Vente"]),
+                    "Expérience": f"{random.randint(0, 5)} ans",
+                    "Statut": "À étudier"
+                })
+        else: # Intégration / Admin RH
+            postes = ["Comptable", "Commercial", "Technicien", "Assistant RH"]
+            for _ in range(6):
+                rows.append({
+                    "Matricule": f"S-{random.randint(1000,9999)}",
+                    "Salarié": f"{random.choice(NOMS)} {random.choice(PRENOMS)}",
+                    "Poste": random.choice(postes),
+                    "Dossier": random.choice(["Complet", "Manque RIB", "Manque Carte Vitale", "À valider"])
+                })
 
+    # 2. RELATIONS PARTENAIRES (Clients, Trains, Salles)
+    elif theme == "RELATIONS PARTENAIRES":
+        if "Déplacements" in mission:
+            for _ in range(5):
+                rows.append({
+                    "Type": random.choice(["Train", "Avion", "Hôtel"]),
+                    "Prestataire": random.choice(["SNCF", "AirFrance", "Ibis", "Kyriad"]),
+                    "Horaire": f"{random.randint(6,20)}h{random.randint(10,59)}",
+                    "Tarif": f"{random.randint(40, 180)} €",
+                    "Option": random.choice(["Annulable", "Non échan.", "Petit-dej inclus"])
+                })
+        elif "Réunions" in mission:
+            salles = ["Salle Conseil", "Salle Bleue", "Auditorium", "Box 1"]
+            for s in salles:
+                rows.append({
+                    "Espace": s,
+                    "Capacité": f"{random.randint(4, 50)} pers.",
+                    "Équipement": "Vidéoprojecteur, Wifi",
+                    "État": random.choice(["Libre", "Occupé", "En travaux"])
+                })
+        else: # Vente / Achat
+            etats = ["Devis envoyé", "Commande reçue", "Facturée", "Relance nécessaire"]
+            for i in range(1, 8):
+                rows.append({
+                    "N°": f"V-{2024000+i}",
+                    "Client": f"Sté {random.choice(NOMS)}",
+                    "Date": "26/11/2024",
+                    "Total TTC": f"{random.randint(200, 5000)} €",
+                    "Statut": random.choice(etats)
+                })
+
+    # 3. GESTION DES ESPACES (Matériel, Stock)
+    elif theme == "GESTION DES ESPACES":
+        cats = ["Papeterie", "Informatique", "Entretien"]
+        for _ in range(10):
+            rows.append({
+                "Réf": f"REF-{random.randint(100,999)}",
+                "Article": f"Article {random.choice(['Standard', 'Premium', 'Eco'])}",
+                "Catégorie": random.choice(cats),
+                "Stock": random.randint(0, 100),
+                "Alerte": 10
+            })
+            
+    # FALLBACK DE SÉCURITÉ (Si jamais un nouveau thème est créé)
+    else:
+        rows.append({"Info": "Aucune donnée spécifique pour ce thème."})
+
+    return pd.DataFrame(rows)
+
+# --- CONFIGURATION DES MISSIONS ---
 DB_PREMIERE = {
     "RESSOURCES HUMAINES": {
         "Recrutement": {
             "competence": "COMPÉTENCE : Définir le Profil, Rédiger l'annonce, Sélectionner (Grille), Convoquer.",
-            "procedure": """
-            PHASE 1 : Analyse du besoin (Donne le contexte, l'élève doit lister 3 compétences clés).
-            PHASE 2 : Rédaction de l'annonce (L'élève doit rédiger le texte).
-            PHASE 3 : Sélection (Affiche le PGI Candidats, l'élève doit choisir qui convoquer et justifier).
-            PHASE 4 : Convocation (L'élève rédige le mail).
-            """,
-            "doc": {
-                "type": "Fiche Poste", "titre": "Assistant(e) Commercial(e)", 
-                "contexte": "Remplacement congé maternité.", 
-                "missions": ["Accueil", "Devis", "Relance"],
-                "lien_url": "https://www.onisep.fr/ressources/univers-metier/metiers/assistant-assistante-de-gestion-pme-pmi"
-            }
+            "procedure": "1. Analyse besoin -> 2. Annonce -> 3. Sélection (Grille) -> 4. Convocation.",
+            "doc": {"type": "Fiche Poste", "titre": "Assistant Commercial", "contexte": "Remplacement.", "missions": ["Accueil", "Devis"], "lien_url": "https://www.onisep.fr"}
         },
-        "Intégration": {"competence": "COMPÉTENCE : Livret d'accueil, Parcours d'arrivée."},
-        "Administratif RH": {"competence": "COMPÉTENCE : Contrat, Registre personnel, Congés."}
+        "Intégration": {
+            "competence": "COMPÉTENCE : Livret d'accueil, Parcours d'arrivée.",
+            "procedure": "1. Checklist matériel -> 2. Livret d'accueil -> 3. Planning."
+        },
+        "Administratif RH": {
+            "competence": "COMPÉTENCE : Contrat, DPAE, Registre personnel.",
+            "procedure": "1. Vérification pièces -> 2. DPAE -> 3. Registre unique."
+        }
     },
     "RELATIONS PARTENAIRES": {
         "Vente": {
-            "competence": "COMPÉTENCE : Devis, Facturation.",
-            "procedure": "1. Devis -> 2. Commande -> 3. Facture -> 4. Relance."
+            "competence": "COMPÉTENCE : Devis, Facturation, Relance.",
+            "procedure": "1. Devis -> 2. Bon de commande -> 3. Facture -> 4. Relance."
         },
-        "Déplacements": {"competence": "COMPÉTENCE : Réservation Train/Hôtel."}
+        "Réunions": {
+            "competence": "COMPÉTENCE : Ordre du jour, Invitation, Réservation.",
+            "procedure": "1. Ordre du jour -> 2. Choix salle -> 3. Invitation."
+        },
+        "Déplacements": {
+            "competence": "COMPÉTENCE : Comparatif, Réservation, Ordre de Mission.",
+            "procedure": "1. Recueil besoins -> 2. Comparatif (Tableau) -> 3. Réservation -> 4. Feuille de route."
+        }
+    },
+    "GESTION DES ESPACES": {
+        "Aménagement": {
+            "competence": "COMPÉTENCE : Ergonomie, Plan d'aménagement.",
+            "procedure": "1. Analyse besoins -> 2. Choix mobilier -> 3. Plan."
+        },
+        "Numérique": {
+            "competence": "COMPÉTENCE : Inventaire, Charte, RGPD.",
+            "procedure": "1. Inventaire -> 2. Charte -> 3. Conformité."
+        },
+        "Ressources": {
+            "competence": "COMPÉTENCE : Gestion stocks, Commandes.",
+            "procedure": "1. Inventaire -> 2. Identification besoins -> 3. Bon de commande."
+        }
     }
 }
 
 # --- 9. IA (PROMPT "EVALUATEUR CCF") ---
 SYSTEM_PROMPT = """
 RÔLE : Tu es le Tuteur de stage et Evaluateur CCF (Bac Pro AGOrA).
-TON : Professionnel, exigeant sur la forme et le fond.
+TON : Professionnel, exigeant.
 
-OBJECTIF : Guider l'élève pour qu'il réalise la tâche.
-NE DONNE JAMAIS LA RÉPONSE TOUTE FAITE.
+OBJECTIF : Guider l'élève pour qu'il réalise la tâche AVEC LES DONNÉES DU PGI CI-DESSOUS.
 
-CRITÈRES D'ÉVALUATION (À UTILISER POUR TES RETOURS) :
-1. Forme : Orthographe, syntaxe pro, formules de politesse.
-2. Fond : Respect de la consigne, exactitude des données (issues du PGI).
-3. Procédure : Respect des étapes logiques.
+CRITÈRES :
+1. Forme : Orthographe, ton pro.
+2. Fond : Exactitude des données (L'élève doit utiliser les chiffres/noms du PGI).
+3. Procédure : Respect des étapes.
 
-NIVEAUX D'ÉVALUATION :
-- NOVICE : L'élève est perdu, guide-le pas à pas.
-- FONCTIONNEL : Le travail est fait mais avec des erreurs mineures.
-- MAÎTRISE : Le travail est conforme aux attentes pro.
+CONSIGNE :
+- Utilise les données du tableau pour poser des questions (ex: "Quel candidat a le diplôme requis ?").
+- Si l'élève invente, dis-lui : "Regarde le PGI".
 
-CONSIGNE : Utilise les données du PGI virtuel affiché pour vérifier si l'élève utilise les bons chiffres/noms.
+SÉCURITÉ : Données réelles -> STOP.
 """
 
 INITIAL_MESSAGE = """
 👋 **Bonjour.**
 
 Bienvenue à l'Agence **Pro'AGOrA**.
-Je suis votre tuteur.
-
 Veuillez lancer votre mission via le menu.
 """
 
@@ -286,10 +350,14 @@ if not st.session_state.messages:
     st.session_state.messages.append({"role": "assistant", "content": INITIAL_MESSAGE})
 
 def lancer_mission(prenom):
+    # 1. Contexte aléatoire
     lieu = random.choice(TYPES_ORGANISATIONS)
     ville = random.choice(VILLES_FRANCE)
     
-    data = DB_PREMIERE[st.session_state.theme][st.session_state.dossier]
+    # 2. Données
+    theme = st.session_state.theme
+    dossier = st.session_state.dossier
+    data = DB_PREMIERE[theme][dossier]
     
     if isinstance(data, str):
         competence = data
@@ -300,8 +368,8 @@ def lancer_mission(prenom):
         procedure = data.get("procedure", "Standard")
         st.session_state.current_context_doc = data.get("doc", None)
 
-    # Génération PGI Dynamique
-    st.session_state.pgi_data = generate_fake_pgi_data(st.session_state.dossier)
+    # 3. Génération PGI strict
+    st.session_state.pgi_data = generate_fake_pgi_data(theme, dossier)
     
     st.session_state.messages = []
     
@@ -310,28 +378,33 @@ def lancer_mission(prenom):
         doc = st.session_state.current_context_doc
         contexte_ia = f"DOCUMENTS : Poste {doc['titre']} - Missions : {', '.join(doc.get('missions', []))}"
 
+    # Injection des données PGI dans le prompt de démarrage
+    pgi_txt = st.session_state.pgi_data.to_string() if st.session_state.pgi_data is not None else "Aucune donnée PGI."
+
     prompt = f"""
     DÉMARRAGE MISSION.
     STAGIAIRE : {prenom}.
     CONTEXTE : {lieu} à {ville}.
-    MISSION : {st.session_state.dossier}.
-    PROCÉDURE À SUIVRE : {procedure}.
+    MISSION : {dossier} (Thème: {theme}).
+    PROCÉDURE : {procedure}.
     {contexte_ia}
+    
+    DONNÉES PGI DU JOUR :
+    {pgi_txt}
     
     ACTION :
     1. Accueille l'élève.
     2. Présente le contexte ({lieu} à {ville}).
-    3. Donne la 1ère consigne (PHASE 1).
+    3. Donne la 1ère consigne en lien avec ces données PGI.
     """
     
     msgs = [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}]
     with st.spinner("Préparation du dossier..."):
         resp, _ = query_groq_with_rotation(msgs)
         st.session_state.messages.append({"role": "assistant", "content": resp})
-    add_notification(f"Mission lancée : {st.session_state.dossier}")
+    add_notification(f"Mission lancée : {dossier}")
 
 def generer_bilan_ccf():
-    """Génère le texte pour la fiche descriptive d'activité"""
     history = [m["content"] for m in st.session_state.messages if m["role"] == "user"]
     full_text = "\n".join(history[-15:]) 
     
@@ -426,8 +499,9 @@ with c1:
     if os.path.exists(LOGO_AGORA):
         b64 = img_to_base64(LOGO_AGORA)
         logo_html = f'<img src="data:image/png;base64,{b64}" style="height:45px; vertical-align:middle; margin-right:10px;">'
-    st.markdown(f"""<div style="display:flex; align-items:center;">{logo_html}<div><div style="font-size:24px; font-weight:bold; color:#202124; line-height:1.2;">Agence Pro'AGOrA</div><div style="font-size:12px; color:#5F6368;">Superviseur IA v3.0</div></div></div>""", unsafe_allow_html=True)
+    st.markdown(f"""<div style="display:flex; align-items:center;">{logo_html}<div><div style="font-size:24px; font-weight:bold; color:#202124; line-height:1.2;">Agence Pro'AGOrA</div><div style="font-size:12px; color:#5F6368;">Superviseur IA v3.1</div></div></div>""", unsafe_allow_html=True)
 
+# BOUTONS RESSOURCES
 with c2:
     if st.session_state.get("current_context_doc"):
         doc = st.session_state.current_context_doc
@@ -451,7 +525,7 @@ with c5:
 
 st.markdown("<hr style='margin: 0 0 20px 0;'>", unsafe_allow_html=True)
 
-# --- SIMULATEUR PGI (NOUVEAU) ---
+# --- SIMULATEUR PGI (AFFICHAGE) ---
 if st.session_state.pgi_data is not None:
     st.markdown('<div class="pgi-header">🖥️ PGI - Espace de Gestion (Données Entreprise)</div>', unsafe_allow_html=True)
     with st.expander("Voir les données (Clients / Stocks / RH)", expanded=True):
@@ -490,7 +564,7 @@ if st.session_state.messages[-1]["role"] == "user":
             if st.session_state.get("current_context_doc"):
                 sys += f"\nCONTEXTE : {st.session_state.current_context_doc['titre']}."
             
-            # Injection des données PGI dans le prompt pour que l'IA sache de quoi on parle
+            # Injection PGI
             if st.session_state.pgi_data is not None:
                 sys += f"\nDONNÉES PGI DISPONIBLES : {st.session_state.pgi_data.to_string()}"
 
