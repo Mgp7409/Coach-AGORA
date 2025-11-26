@@ -302,6 +302,11 @@ def lancer_mission_centrale(theme, dossier, prenom):
 
 # --- 10. INTERFACE GRAPHIQUE ---
 
+# --- DÉFINITION UTILISATEUR (CORRECTIF) ---
+# On récupère le prénom soit de la sidebar, soit du centre, soit vide
+current_user_name = st.session_state.get("name_sidebar") or st.session_state.get("name_center")
+user_label = f"👤 {current_user_name}" if current_user_name else "👤 Invité"
+
 LOGO_LYCEE = "logo_lycee.png"
 LOGO_AGORA = "logo_agora.png"
 BOT_AVATAR = LOGO_AGORA if os.path.exists(LOGO_AGORA) else "🤖"
@@ -313,6 +318,7 @@ with st.sidebar:
     
     st.info("🔒 **Espace Sécurisé** : Données fictives.")
     
+    # Champ Prénom Sidebar
     sidebar_name = st.text_input("Votre Prénom (Menu)", key="name_sidebar")
     
     st.subheader("📂 Changer de Mission")
@@ -345,7 +351,6 @@ with st.sidebar:
         chat_df = pd.DataFrame(st.session_state.messages)
         csv_data = chat_df.to_csv(index=False).encode('utf-8')
         
-        # Utilisation du nom de l'élève s'il est dispo, sinon "anonyme"
         safe_name = sidebar_name if sidebar_name else st.session_state.get("name_center", "anonyme")
         date_str = datetime.now().strftime("%d%m_%H%M")
         file_name = f"suivi_agora_{safe_name}_{date_str}.csv"
@@ -370,17 +375,21 @@ with c1:
     if os.path.exists(LOGO_AGORA):
         b64 = img_to_base64(LOGO_AGORA)
         logo_html = f'<img src="data:image/png;base64,{b64}" style="height:40px; margin-right:10px;">'
-    st.markdown(f"""<div style="display:flex; align-items:center; white-space:nowrap; overflow:hidden;">{logo_html}<div><div class="header-title" style="font-weight:bold; color:#202124;">Agence Pro'AGOrA</div><div class="header-subtitle" style="color:#5F6368;">Superviseur IA v1.9</div></div></div>""", unsafe_allow_html=True)
+    st.markdown(f"""<div style="display:flex; align-items:center; white-space:nowrap; overflow:hidden;">{logo_html}<div><div class="header-title" style="font-weight:bold; color:#202124;">Agence Pro'AGOrA</div><div class="header-subtitle" style="color:#5F6368;">Superviseur IA v2.0</div></div></div>""", unsafe_allow_html=True)
 
 # Boutons Header (Ressources)
 with c2:
     if st.session_state.get("current_context_doc"):
         doc = st.session_state.current_context_doc
         with st.popover(f"📄 {doc['type']}", use_container_width=True):
-            st.markdown(f"**{doc['titre']}**")
-            st.caption(doc.get('contexte', ''))
+            st.markdown(f"### {doc['titre']}")
+            st.info(doc.get('contexte', ''))
+            st.markdown("**Missions principales :**")
+            for m in doc.get('missions', []):
+                st.markdown(f"- {m}")
+            st.markdown(f"**Profil recherché :** {doc.get('profil', '')}")
             st.markdown("---")
-            if 'lien_url' in doc: st.link_button("Voir fiche", doc['lien_url'])
+            if 'lien_url' in doc: st.link_button(doc.get('lien_titre', 'En savoir plus'), doc['lien_url'])
 
 with c3:
     with st.popover("ℹ️ Métiers", use_container_width=True):
@@ -393,6 +402,7 @@ with c4:
         st.link_button("📂 ENT", "https://cas.ent.auvergnerhonealpes.fr/login?service=https%3A%2F%2Fglieres.ent.auvergnerhonealpes.fr%2Fsg.do%3FPROC%3DPAGE_ACCUEIL")
 
 with c5:
+    # Correction NameError : user_label est maintenant défini AVANT
     st.button(f"👤", help=user_label, disabled=True, use_container_width=True)
 
 st.markdown("<hr style='margin: 0 0 10px 0;'>", unsafe_allow_html=True)
