@@ -332,6 +332,7 @@ with st.sidebar:
     
     st.markdown("---")
     
+    # GAMIFICATION & IDENTITÉ
     student_name = st.text_input("Prénom", placeholder="Ex: Camille")
     user_label = f"👤 {student_name}" if student_name else "👤 Invité"
     
@@ -416,7 +417,8 @@ for i, msg in enumerate(st.session_state.messages):
     with st.chat_message(msg["role"], avatar=avatar):
         st.markdown(msg["content"])
         if msg["role"] == "assistant" and HAS_AUDIO:
-            if st.button("🔊", key=f"tts_{i}", help="Lire"):
+            # Petit bouton audio discret sous chaque message assistant
+            if st.button("🔊", key=f"tts_{i}", help="Lire ce message"):
                 try:
                     tts = gTTS(clean_text_for_audio(msg["content"]), lang='fr')
                     buf = BytesIO()
@@ -448,3 +450,4 @@ if st.session_state.messages[-1]["role"] == "user":
             if not resp: resp = "Erreur technique."
             st.markdown(resp)
             st.session_state.messages.append({"role": "assistant", "content": resp})
+            # Pas de rerun auto pour l'audio ici, l'élève clique s'il veut écouter
