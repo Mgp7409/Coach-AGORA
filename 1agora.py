@@ -37,14 +37,28 @@ if "logs" not in st.session_state: st.session_state.logs = []
 if "notifications" not in st.session_state: st.session_state.notifications = ["Bienvenue."]
 if "current_context_doc" not in st.session_state: st.session_state.current_context_doc = None
 
-# --- 3. OUTILS IMAGE ---
+# --- 3. VARIABLES DE CONTEXTE (VILLES & ORGANISATIONS) ---
+VILLES_FRANCE = [
+    "Lyon", "Bordeaux", "Lille", "Nantes", "Strasbourg", "Toulouse", "Marseille", "Nice", "Rennes", 
+    "Montpellier", "Grenoble", "Dijon", "Angers", "Nîmes", "Saint-Étienne", "Clermont-Ferrand", 
+    "Le Havre", "Tours", "Limoges", "Brest"
+]
+
+TYPES_ORGANISATIONS = [
+    "une Mairie (Service Technique)", "une Clinique Privée", "un Garage Automobile", 
+    "une Association d'Aide à Domicile", "une PME du Bâtiment", "une Agence Immobilière", 
+    "un Cabinet d'Architecte", "un Supermarché (Grande Distribution)", "une Entreprise de Transport", 
+    "un Office de Tourisme"
+]
+
+# --- 4. OUTILS IMAGE ---
 def img_to_base64(img_path):
     if os.path.exists(img_path):
         with open(img_path, "rb") as f:
             return base64.b64encode(f.read()).decode()
     return ""
 
-# --- 4. STYLE & CSS ---
+# --- 5. STYLE & CSS ---
 is_dys = st.session_state.get("mode_dys", False)
 font_family = "'Verdana', sans-serif" if is_dys else "'Segoe UI', 'Roboto', Helvetica, Arial, sans-serif"
 font_size = "18px" if is_dys else "16px"
@@ -124,7 +138,7 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 5. LOGIQUE API ---
+# --- 6. LOGIQUE API ---
 def get_api_keys_list():
     if "groq_keys" in st.secrets: return st.secrets["groq_keys"]
     elif "GROQ_API_KEY" in st.secrets: return [st.secrets["GROQ_API_KEY"]]
@@ -149,7 +163,7 @@ def query_groq_with_rotation(messages):
         except: continue
     return None, "SATURATION"
 
-# --- 6. OUTILS ---
+# --- 7. OUTILS ---
 def extract_text_from_docx(file):
     try:
         doc = Document(file)
@@ -173,73 +187,92 @@ def log_interaction(student, role, content):
         "User": student, "Role": role, "Msg": content[:50]
     })
 
-# --- 7. DONNÉES MÉTIER (CORRIGÉES AVEC PROCÉDURES) ---
-# J'ai ajouté un champ "procedure" pour guider l'IA
+# --- 8. DONNÉES MÉTIER (SCÉNARIOS & PROCÉDURES) ---
+# J'ai ajouté le champ "procedure" qui dicte à l'IA les étapes précises
 DB_PREMIERE = {
     "RESSOURCES HUMAINES": {
         "Recrutement": {
             "competence": "COMPÉTENCE : Définir le Profil, Rédiger l'annonce, Sélectionner (Grille), Convoquer.",
-            "procedure": "1. Analyse du besoin (Fiche de poste) -> 2. Choix des canaux de diffusion -> 3. Création de la Grille de sélection -> 4. Rédaction du Mail de convocation.",
+            "procedure": """
+            PHASE 1 : Analyse du besoin (Tu donnes le contexte, l'élève doit lister les compétences clés).
+            PHASE 2 : Rédaction de l'annonce (L'élève doit rédiger le texte de l'offre).
+            PHASE 3 : Sélection (L'élève doit créer une grille d'évaluation avec des critères pondérés).
+            PHASE 4 : Convocation (L'élève doit rédiger le mail de convocation à l'entretien).
+            """,
             "doc": {
-                "type": "Fiche de Poste",
-                "titre": "Assistant(e) Commercial(e) (H/F)",
-                "contexte": "Garage 'AutoPlus' (Lyon), 15 salariés. Besoin urgent suite à un départ.",
-                "missions": ["Accueil client", "Facturation", "Gestion planning atelier"],
-                "profil": "Bac Pro, bon contact, rigoureux.",
+                "type": "Contexte RH",
+                "titre": "Besoin en Recrutement",
+                "contexte": "Suite au départ de Mme Vasseur, nous devons recruter un(e) Assistant(e) Administratif(ve) polyvalent(e).",
+                "missions": ["Accueil physique/téléphonique", "Gestion du courrier", "Suivi des commandes fournitures"],
+                "profil": "Bac Pro AGOrA, maîtrise Excel, bon relationnel.",
                 "lien_titre": "Fiche Métier (ONISEP)",
-                "lien_url": "https://www.onisep.fr/ressources/univers-metier/metiers/assistant-assistante-commercial-commerciale"
+                "lien_url": "https://www.onisep.fr/ressources/univers-metier/metiers/assistant-assistante-de-gestion-pme-pmi"
             }
         },
         "Intégration": {
-            "competence": "COMPÉTENCE : Livret d'accueil, Parcours d'arrivée.",
-            "procedure": "1. Préparation du poste de travail -> 2. Kit d'accueil -> 3. Planning de la 1ère journée."
+            "competence": "COMPÉTENCE : Préparer l'arrivée, Livret d'accueil, Planning.",
+            "procedure": "1. Checklist avant arrivée (Matériel, Badges) -> 2. Conception du Livret d'accueil (Sommaire) -> 3. Planning de la première semaine."
         },
-        "Administratif RH": {"competence": "COMPÉTENCE : Contrat, Registre personnel, Congés."}
+        "Administratif RH": {
+            "competence": "COMPÉTENCE : Contrat de travail, DPAE, Registre du personnel.",
+            "procedure": "1. Liste des documents à demander au salarié -> 2. Vérification des mentions obligatoires du contrat -> 3. Mise à jour du Registre Unique du Personnel."
+        }
     },
     "GESTION DES ESPACES": {
-        "Aménagement": {"competence": "COMPÉTENCE : Proposer un aménagement ergonomique."},
-        "Numérique": {"competence": "COMPÉTENCE : Lister matériel et logiciels (RGPD)."},
-        "Ressources": {"competence": "COMPÉTENCE : Gérer stocks et réservations."}
+        "Aménagement": {
+            "competence": "COMPÉTENCE : Ergonomie, Plan d'aménagement, Sécurité.",
+            "procedure": "1. Analyse des besoins (Espace, Lumière) -> 2. Choix du mobilier sur catalogue -> 3. Plan d'implantation."
+        },
+        "Numérique": {
+            "competence": "COMPÉTENCE : Gestion parc informatique, RGPD.",
+            "procedure": "1. Inventaire du matériel -> 2. Charte informatique -> 3. Vérification conformité RGPD."
+        }
     },
     "RELATIONS PARTENAIRES": {
-        "Vente": {"competence": "COMPÉTENCE : Devis, Négociation, Facturation."},
-        "Réunions": {"competence": "COMPÉTENCE : Ordre du jour, Réservation, Compte-Rendu."},
-        "Déplacements": {"competence": "COMPÉTENCE : Réservation Train/Hôtel, Ordre de Mission."}
+        "Vente": {
+            "competence": "COMPÉTENCE : Devis, Négociation, Facturation.",
+            "procedure": "1. Prise de connaissance de la demande client -> 2. Établissement du Devis -> 3. Traitement de la commande -> 4. Facturation."
+        },
+        "Réunions": {
+            "competence": "COMPÉTENCE : Ordre du jour, Réservation, Compte-Rendu.",
+            "procedure": "1. Définition Ordre du jour -> 2. Invitation/Convocation -> 3. Réservation salle/matériel -> 4. Prise de note et CR."
+        }
     }
 }
 
-# --- 8. IA (PROMPT EXPERT BAC PRO) ---
+# --- 9. IA (PROMPT EXPERT & DIRECTIF) ---
 SYSTEM_PROMPT = """
-RÔLE : Tu es le Superviseur Virtuel de l'Agence Pro'AGOrA.
-TON : Professionnel, directif mais bienveillant.
-MISSION : Guider l'élève dans la réalisation de tâches professionnelles CONCRÈTES.
+RÔLE : Tu es le Tuteur de stage de l'élève (Bac Pro AGOrA).
+TON : Professionnel, directif, pédagogique.
+OBJECTIF : Faire réaliser des TÂCHES PROFESSIONNELLES concrètes à l'élève.
 
-⛔ CE QUE TU NE DOIS PAS FAIRE :
-- Ne pose pas de questions de cours théoriques ("C'est quoi le recrutement ?").
-- Ne demande pas à l'élève d'inventer des choses qu'il ne sait pas.
+RÈGLES D'OR :
+1. NE POSE PAS DE QUESTIONS DE COURS ("C'est quoi un devis ?"). DEMANDE DE FAIRE ("Fais le devis").
+2. SUIS LA PROCÉDURE : Tu as une procédure étape par étape. Ne passe pas à l'étape 2 tant que l'étape 1 n'est pas validée.
+3. EXIGENCE : Vérifie la qualité du travail (Orthographe, Formules de politesse, Mentions obligatoires). Si c'est incomplet, demande de corriger.
+4. AIDE : Si l'élève bloque, donne un exemple ou une structure à trous, mais ne fais pas à sa place.
 
-✅ CE QUE TU DOIS FAIRE :
-1. DONNER LE CADRE : Au début, donne toujours le contexte précis (Entreprise, Ville, Problème à résoudre).
-2. SUIVRE LA PROCÉDURE : Guide l'élève étape par étape selon le référentiel Bac Pro AGOrA.
-   - Ex pour Recrutement : D'abord on valide le profil, ensuite on fait la grille, enfin on convoque.
-3. DEMANDER DES ÉCRITS PROS : Demande à l'élève de rédiger le mail, de lister les critères de la grille, ou de rédiger l'annonce.
-4. SOURCES : Ajoute "📎 Source : [Nom]" pour les notions clés.
-
-SÉCURITÉ : Données réelles -> STOP.
+SÉCURITÉ : Si l'élève utilise des vrais noms -> STOP.
 """
 
 INITIAL_MESSAGE = """
 👋 **Bonjour.**
 
 Bienvenue à l'Agence **Pro'AGOrA**.
-Veuillez sélectionner votre **Mission** à gauche pour commencer.
+Je suis votre tuteur.
+
+Veuillez sélectionner votre **Mission** dans le menu de gauche pour démarrer le stage.
 """
 
 if not st.session_state.messages:
     st.session_state.messages.append({"role": "assistant", "content": INITIAL_MESSAGE})
 
 def lancer_mission(prenom):
-    # Récupération Données
+    # 1. Tirage aléatoire du contexte (Lieu & Ville)
+    lieu = random.choice(TYPES_ORGANISATIONS)
+    ville = random.choice(VILLES_FRANCE)
+    
+    # 2. Récupération Données Mission
     data = DB_PREMIERE[st.session_state.theme][st.session_state.dossier]
     
     if isinstance(data, str):
@@ -251,37 +284,42 @@ def lancer_mission(prenom):
         procedure = data.get("procedure", "Procédure standard.")
         st.session_state.current_context_doc = data.get("doc", None)
 
+    # 3. Initialisation
     st.session_state.messages = []
     
     contexte_ia = ""
     if st.session_state.current_context_doc:
         doc = st.session_state.current_context_doc
         contexte_ia = f"""
-        CONTEXTE SCÉNARIO :
-        - Entreprise : {doc.get('contexte', 'PME locale')}
-        - Poste concerné : {doc['titre']}
-        - Missions du poste : {', '.join(doc.get('missions', []))}
+        DOCUMENTS FOURNIS :
+        - Titre poste : {doc['titre']}
+        - Missions : {', '.join(doc.get('missions', []))}
         """
 
+    # 4. Prompt de Démarrage (Contextualisé)
     prompt = f"""
-    DÉMARRAGE MISSION pour l'élève {prenom}.
-    DOSSIER : '{st.session_state.dossier}'.
-    PROCÉDURE À SUIVRE : {procedure}
+    NOUVELLE SESSION DE STAGE.
+    STAGIAIRE : {prenom}
+    CONTEXTE : {lieu} situé à {ville}.
+    MISSION : {st.session_state.dossier}
+    PROCÉDURE OBLIGATOIRE À SUIVRE : 
+    {procedure}
+    
     {contexte_ia}
     
-    ACTION ATTENDUE :
-    1. Accueille l'élève en tant que Responsable du service.
-    2. Donne-lui le contexte précis (Lieu, Entreprise).
-    3. Donne la PREMIÈRE consigne concrète (ex: "Prends connaissance de la fiche de poste ci-jointe et liste-moi les 3 critères impératifs pour la grille de sélection").
+    CONSIGNE POUR L'IA :
+    1. Accueille le stagiaire en lui présentant l'entreprise ({lieu} à {ville}).
+    2. Donne-lui sa première tâche concrète (PHASE 1 de la procédure).
+    3. Sois précis : dis-lui exactement ce qu'il doit produire (une liste, un mail, un tableau ?).
     """
     
     msgs = [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}]
     with st.spinner("Préparation du dossier..."):
         resp, _ = query_groq_with_rotation(msgs)
         st.session_state.messages.append({"role": "assistant", "content": resp})
-    add_notification(f"Mission lancée : {st.session_state.dossier}")
+    add_notification(f"Mission lancée : {st.session_state.dossier} ({ville})")
 
-# --- 9. INTERFACE ---
+# --- 10. INTERFACE ---
 
 LOGO_LYCEE = "logo_lycee.png"
 LOGO_AGORA = "logo_agora.png"
@@ -294,7 +332,6 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # GAMIFICATION & IDENTITÉ
     student_name = st.text_input("Prénom", placeholder="Ex: Camille")
     user_label = f"👤 {student_name}" if student_name else "👤 Invité"
     
@@ -309,25 +346,27 @@ with st.sidebar:
         else:
             st.warning("Prénom requis")
 
-    # BOUTON SAUVEGARDE (TOUJOURS VISIBLE MAIS GRISE SI VIDE)
+    # BOUTON SAUVEGARDE (Fixe)
     st.markdown("---")
-    csv_data = ""
-    disabled_save = True
-    if len(st.session_state.messages) > 1:
+    
+    # Préparation du CSV
+    if len(st.session_state.messages) > 0:
         chat_df = pd.DataFrame(st.session_state.messages)
         csv_data = chat_df.to_csv(index=False).encode('utf-8')
-        disabled_save = False
-        
-    date_str = datetime.now().strftime("%d%m_%H%M")
-    file_name = f"agora_{student_name}_{date_str}.csv"
+        file_name = f"agora_{student_name}_{datetime.now().strftime('%H%M')}.csv"
+        state_disabled = False
+    else:
+        csv_data = ""
+        file_name = "vide.csv"
+        state_disabled = True
     
     st.download_button(
         label="💾 Sauvegarder mon travail",
         data=csv_data,
         file_name=file_name,
         mime="text/csv",
-        disabled=disabled_save,
-        help="Enregistre la conversation pour la montrer au prof."
+        disabled=state_disabled,
+        help="Télécharge ta conversation pour le dossier CCF"
     )
     
     if st.button("🗑️ Reset"):
@@ -377,8 +416,7 @@ for i, msg in enumerate(st.session_state.messages):
     with st.chat_message(msg["role"], avatar=avatar):
         st.markdown(msg["content"])
         if msg["role"] == "assistant" and HAS_AUDIO:
-            # Petit bouton audio discret sous chaque message assistant
-            if st.button("🔊", key=f"tts_{i}", help="Lire ce message"):
+            if st.button("🔊", key=f"tts_{i}", help="Lire"):
                 try:
                     tts = gTTS(clean_text_for_audio(msg["content"]), lang='fr')
                     buf = BytesIO()
@@ -410,4 +448,3 @@ if st.session_state.messages[-1]["role"] == "user":
             if not resp: resp = "Erreur technique."
             st.markdown(resp)
             st.session_state.messages.append({"role": "assistant", "content": resp})
-            # Pas de rerun auto pour l'audio ici, l'élève clique s'il veut écouter
