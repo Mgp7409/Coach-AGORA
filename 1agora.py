@@ -36,7 +36,7 @@ if "messages" not in st.session_state: st.session_state.messages = []
 if "logs" not in st.session_state: st.session_state.logs = []
 if "notifications" not in st.session_state: st.session_state.notifications = ["Système prêt."]
 if "current_context_doc" not in st.session_state: st.session_state.current_context_doc = None
-if "pgi_data" not in st.session_state: st.session_state.pgi_data = None # Pour le simulateur PGI
+if "pgi_data" not in st.session_state: st.session_state.pgi_data = None
 
 # GAMIFICATION
 if "xp" not in st.session_state: st.session_state.xp = 0
@@ -64,9 +64,14 @@ def update_xp(amount):
     else:
         st.toast(f"+{amount} XP", icon="⭐")
 
-# --- 3. VARIABLES DE CONTEXTE ---
-VILLES_FRANCE = ["Lyon", "Bordeaux", "Lille", "Nantes", "Strasbourg", "Toulouse", "Marseille", "Nice", "Rennes", "Dijon"]
-TYPES_ORGANISATIONS = ["Mairie", "Clinique", "Garage", "Association", "PME BTP", "Agence Immo", "Supermarché"]
+# --- 3. LISTES DE DONNÉES (POUR GÉNÉRATION ALÉATOIRE) ---
+VILLES_FRANCE = ["Lyon", "Bordeaux", "Lille", "Nantes", "Strasbourg", "Toulouse", "Marseille", "Nice", "Rennes", "Dijon", "Brest", "Tours", "Grenoble", "Annecy", "Rouen"]
+TYPES_ORGANISATIONS = ["Mairie", "Clinique", "Garage", "Association", "PME BTP", "Agence Immo", "Supermarché", "Cabinet Comptable", "Lycée", "EHPAD"]
+
+NOMS = ["Martin", "Bernard", "Thomas", "Petit", "Robert", "Richard", "Durand", "Dubois", "Moreau", "Laurent", "Simon", "Michel", "Lefebvre", "Leroy", "Roux", "David", "Bertrand", "Morel", "Fournier", "Girard"]
+PRENOMS = ["Emma", "Gabriel", "Léo", "Louise", "Raphaël", "Jade", "Louis", "Ambre", "Lucas", "Arthur", "Jules", "Mila", "Adam", "Alice", "Liam", "Lina", "Sacha", "Chloé", "Hugo", "Léa"]
+DIPLOMES = ["Bac Pro AGOrA", "BTS GPME", "BTS SAM", "CAP Employé de Vente", "Bac Pro Commerce", "Licence Pro RH", "Aucun diplôme", "Bac Général"]
+COMPETENCES_CLE = ["Anglais B2", "Excel Expert", "Permis B", "Logiciel EBP", "Accueil physique", "Comptabilité base", "Réseaux sociaux"]
 
 # --- 4. OUTILS IMAGE ---
 def img_to_base64(img_path):
@@ -103,15 +108,7 @@ st.markdown(f"""
         font-size: 14px;
         margin-top: 10px;
     }}
-    .pgi-container {{
-        border: 1px solid #E0E0E0;
-        border-top: none;
-        border-radius: 0 0 8px 8px;
-        padding: 10px;
-        margin-bottom: 20px;
-        background: #FAFAFA;
-    }}
-
+    
     /* BOUTONS */
     button[kind="primary"] {{
         background: linear-gradient(135deg, #0F9D58 0%, #00C9FF 100%);
@@ -182,45 +179,63 @@ def add_notification(msg):
     ts = datetime.now().strftime("%H:%M")
     st.session_state.notifications.insert(0, f"{ts} - {msg}")
 
-# --- 8. DONNÉES & PGI SIMULATEUR ---
+# --- 8. GÉNÉRATEUR PGI DYNAMIQUE ---
 def generate_fake_pgi_data(mission_type):
-    """Génère des données fictives pour le PGI selon la mission"""
+    """Génère des données fictives aléatoires à chaque appel"""
+    rows = []
+    
     if "Recrutement" in mission_type or "RH" in mission_type:
-        return pd.DataFrame({
-            "Nom Candidat": ["Dubois", "Martin", "Kowalski", "Diallo"],
-            "Prénom": ["Marie", "Lucas", "Anna", "Seydou"],
-            "Diplôme": ["Bac Pro AGOrA", "BTS GPME", "CAP Vente", "Bac Pro Commerce"],
-            "Expérience": ["Débutant", "2 ans", "5 ans", "Débutant"],
-            "Statut": ["Reçu", "En attente", "Reçu", "Non retenu"]
-        })
+        for _ in range(6): # 6 candidats aléatoires
+            nom = random.choice(NOMS).upper()
+            prenom = random.choice(PRENOMS)
+            diplome = random.choice(DIPLOMES)
+            exp = f"{random.randint(0, 10)} ans"
+            atout = random.choice(COMPETENCES_CLE)
+            rows.append({
+                "Nom": nom, "Prénom": prenom, 
+                "Diplôme": diplome, "Expérience": exp, 
+                "Atout Clé": atout, "Statut": "À étudier" # Statut neutre pour obliger l'élève à choisir
+            })
+        return pd.DataFrame(rows)
+        
     elif "Vente" in mission_type or "Facturation" in mission_type:
-        return pd.DataFrame({
-            "Client": ["Garage Auto", "Mairie de Lyon", "Assoc. Sport", "Mme Dupont"],
-            "Réf. Commande": ["CMD-001", "CMD-002", "CMD-003", "CMD-004"],
-            "Montant HT": ["1500 €", "320 €", "45 €", "890 €"],
-            "État": ["Facturée", "En cours", "Livrée", "Impayé"]
-        })
-    else: # Stock / Général
-        return pd.DataFrame({
-            "Réf. Produit": ["PAP-A4", "STY-BL", "CART-EN", "CLA-USB"],
-            "Désignation": ["Papier A4 (500)", "Stylo Bleu", "Cartouche Encre", "Clé USB 32Go"],
-            "Stock Réel": [12, 50, 2, 5],
-            "Stock Alerte": [5, 20, 3, 2]
-        })
+        etats = ["Devis envoyé", "Commande reçue", "À facturer", "Relance J+1"]
+        for i in range(1, 7):
+            client = f"{random.choice(['Garage', 'Mairie', 'Société', 'M.'])} {random.choice(NOMS)}"
+            rows.append({
+                "N° Pièce": f"V-{2024000+i}",
+                "Client": client,
+                "Date": f"{random.randint(1,28)}/10/2024",
+                "Montant TTC": f"{random.randint(50, 2000)} €",
+                "État": random.choice(etats)
+            })
+        return pd.DataFrame(rows)
+        
+    else: # Stock / Matériel
+        produits = ["Papier A4", "Classeurs", "Stylos", "Cartouches", "PC Portable", "Écran 24p", "Clavier"]
+        for prod in produits:
+            rows.append({
+                "Réf": f"ART-{random.randint(100,999)}",
+                "Désignation": prod,
+                "Stock Réel": random.randint(0, 50),
+                "Stock Alerte": 5,
+                "Besoin Réassort": "NON" if random.randint(0,1) else "OUI"
+            })
+        return pd.DataFrame(rows)
 
 DB_PREMIERE = {
     "RESSOURCES HUMAINES": {
         "Recrutement": {
             "competence": "COMPÉTENCE : Définir le Profil, Rédiger l'annonce, Sélectionner (Grille), Convoquer.",
             "procedure": """
-            PHASE 1 : Analyse du besoin (Donne le contexte PME, l'élève doit lister 3 compétences clés).
-            PHASE 2 : Rédaction de l'annonce (L'élève doit rédiger le corps de l'annonce).
-            PHASE 3 : Sélection (Affiche le PGI Candidats, l'élève doit choisir 2 candidats à convoquer).
+            PHASE 1 : Analyse du besoin (Donne le contexte, l'élève doit lister 3 compétences clés).
+            PHASE 2 : Rédaction de l'annonce (L'élève doit rédiger le texte).
+            PHASE 3 : Sélection (Affiche le PGI Candidats, l'élève doit choisir qui convoquer et justifier).
             PHASE 4 : Convocation (L'élève rédige le mail).
             """,
             "doc": {
                 "type": "Fiche Poste", "titre": "Assistant(e) Commercial(e)", 
-                "contexte": "Besoin urgent pour renforcer l'équipe.", 
+                "contexte": "Remplacement congé maternité.", 
                 "missions": ["Accueil", "Devis", "Relance"],
                 "lien_url": "https://www.onisep.fr/ressources/univers-metier/metiers/assistant-assistante-de-gestion-pme-pmi"
             }
@@ -237,29 +252,33 @@ DB_PREMIERE = {
     }
 }
 
-# --- 9. IA (PROMPT "INSPECTEUR") ---
+# --- 9. IA (PROMPT "EVALUATEUR CCF") ---
 SYSTEM_PROMPT = """
-RÔLE : Tu es le Tuteur de stage (Professionnel exigeant).
-MISSION : Guider l'élève vers la certification Bac Pro AGOrA.
+RÔLE : Tu es le Tuteur de stage et Evaluateur CCF (Bac Pro AGOrA).
+TON : Professionnel, exigeant sur la forme et le fond.
 
-CRITÈRES D'ÉVALUATION (À GARDER EN TÊTE) :
-- Rigueur (Pas de fautes, données exactes).
-- Professionnalisme (Ton adapté, vouvoiement).
-- Utilisation des outils (L'élève utilise-t-il les données du PGI fourni ?).
+OBJECTIF : Guider l'élève pour qu'il réalise la tâche.
+NE DONNE JAMAIS LA RÉPONSE TOUTE FAITE.
 
-CONSIGNES :
-1. NE FAIS PAS À LA PLACE DE L'ÉLÈVE.
-2. Si l'élève répond, valide ou corrige selon les critères : "Novice" (Trop vague), "Maîtrise" (Correct), "Expertise" (Parfait).
-3. Utilise les données du PGI virtuel affiché à l'écran pour tes questions (ex: "Quel candidat as-tu retenu dans la liste ?").
-4. Ajoute "📎 Source : [Nom]" pour les règles métier.
+CRITÈRES D'ÉVALUATION (À UTILISER POUR TES RETOURS) :
+1. Forme : Orthographe, syntaxe pro, formules de politesse.
+2. Fond : Respect de la consigne, exactitude des données (issues du PGI).
+3. Procédure : Respect des étapes logiques.
 
-SÉCURITÉ : Données réelles -> STOP.
+NIVEAUX D'ÉVALUATION :
+- NOVICE : L'élève est perdu, guide-le pas à pas.
+- FONCTIONNEL : Le travail est fait mais avec des erreurs mineures.
+- MAÎTRISE : Le travail est conforme aux attentes pro.
+
+CONSIGNE : Utilise les données du PGI virtuel affiché pour vérifier si l'élève utilise les bons chiffres/noms.
 """
 
 INITIAL_MESSAGE = """
 👋 **Bonjour.**
 
 Bienvenue à l'Agence **Pro'AGOrA**.
+Je suis votre tuteur.
+
 Veuillez lancer votre mission via le menu.
 """
 
@@ -281,7 +300,7 @@ def lancer_mission(prenom):
         procedure = data.get("procedure", "Standard")
         st.session_state.current_context_doc = data.get("doc", None)
 
-    # Génération du PGI
+    # Génération PGI Dynamique
     st.session_state.pgi_data = generate_fake_pgi_data(st.session_state.dossier)
     
     st.session_state.messages = []
@@ -292,16 +311,17 @@ def lancer_mission(prenom):
         contexte_ia = f"DOCUMENTS : Poste {doc['titre']} - Missions : {', '.join(doc.get('missions', []))}"
 
     prompt = f"""
-    DÉMARRAGE STAGE : Élève {prenom}.
-    LIEU : {lieu} à {ville}.
+    DÉMARRAGE MISSION.
+    STAGIAIRE : {prenom}.
+    CONTEXTE : {lieu} à {ville}.
     MISSION : {st.session_state.dossier}.
-    PROCÉDURE : {procedure}.
+    PROCÉDURE À SUIVRE : {procedure}.
     {contexte_ia}
     
     ACTION :
-    1. Accueille l'élève en tant que tuteur dans cette structure précise.
-    2. Donne la situation pro.
-    3. Donne la 1ère tâche.
+    1. Accueille l'élève.
+    2. Présente le contexte ({lieu} à {ville}).
+    3. Donne la 1ère consigne (PHASE 1).
     """
     
     msgs = [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}]
@@ -310,22 +330,22 @@ def lancer_mission(prenom):
         st.session_state.messages.append({"role": "assistant", "content": resp})
     add_notification(f"Mission lancée : {st.session_state.dossier}")
 
-def generer_bilan_competences():
-    """Génère un résumé pour la fiche CCF"""
+def generer_bilan_ccf():
+    """Génère le texte pour la fiche descriptive d'activité"""
     history = [m["content"] for m in st.session_state.messages if m["role"] == "user"]
-    full_text = "\n".join(history[-10:]) # Analyse les 10 derniers échanges
+    full_text = "\n".join(history[-15:]) 
     
     prompt_bilan = f"""
-    Analyse ce travail d'élève :
+    Agis comme un Inspecteur IEN. Analyse ce travail d'élève (Bac Pro AGORA) :
     {full_text}
     
-    Génère un 'Bilan pour Fiche CCF' court :
-    1. Contexte (1 phrase).
-    2. Activités réalisées.
-    3. Outils mobilisés.
-    4. Niveau estimé (Novice/Fonctionnel/Maîtrise).
+    Rédige le contenu pour sa "Fiche Descriptive d'Activité" (E31 ou E32) :
+    1. Contexte : (Résume le lieu et la mission).
+    2. Activités réalisées : (Liste les tâches faites).
+    3. Outils mobilisés : (Cite le PGI, le traitement de texte...).
+    4. Bilan des compétences : (Utilise les termes : Novice, Fonctionnel, Maîtrise).
     """
-    msgs = [{"role": "system", "content": "Tu es un évaluateur."}, {"role": "user", "content": prompt_bilan}]
+    msgs = [{"role": "system", "content": "Tu es un expert évaluation."}, {"role": "user", "content": prompt_bilan}]
     return query_groq_with_rotation(msgs)[0]
 
 # --- 10. INTERFACE ---
@@ -347,7 +367,6 @@ with st.sidebar:
     st.caption(f"XP : {st.session_state.xp}")
     
     student_name = st.text_input("Prénom", placeholder="Ex: Camille")
-    user_label = f"👤 {student_name}" if student_name else "👤 Invité"
     
     st.subheader("📂 Missions")
     st.session_state.theme = st.selectbox("Thème", list(DB_PREMIERE.keys()))
@@ -374,21 +393,25 @@ with st.sidebar:
             update_xp(20)
             st.rerun()
             
-    # BILAN CCF (NOUVEAU)
+    # BILAN CCF
+    st.markdown("---")
     if st.button("📝 Générer Bilan CCF"):
         if len(st.session_state.messages) > 2:
-            bilan = generer_bilan_competences()
-            st.session_state.messages.append({"role": "assistant", "content": f"**BILAN AUTOMATIQUE :**\n\n{bilan}"})
+            bilan = generer_bilan_ccf()
+            st.session_state.messages.append({"role": "assistant", "content": f"**BILAN POUR DOSSIER CCF :**\n\n{bilan}"})
             st.rerun()
         else:
             st.warning("Travaillez d'abord !")
 
     # SAUVEGARDE
-    st.markdown("---")
+    csv_data = ""
+    btn_state = True
     if len(st.session_state.messages) > 0:
         chat_df = pd.DataFrame(st.session_state.messages)
         csv_data = chat_df.to_csv(index=False).encode('utf-8')
-        st.download_button("💾 Sauvegarder", csv_data, "agora_save.csv", "text/csv")
+        btn_state = False
+        
+    st.download_button("💾 Sauvegarder", csv_data, "agora_save.csv", "text/csv", disabled=btn_state)
     
     if st.button("🗑️ Reset"):
         st.session_state.messages = [{"role": "assistant", "content": INITIAL_MESSAGE}]
@@ -403,9 +426,8 @@ with c1:
     if os.path.exists(LOGO_AGORA):
         b64 = img_to_base64(LOGO_AGORA)
         logo_html = f'<img src="data:image/png;base64,{b64}" style="height:45px; vertical-align:middle; margin-right:10px;">'
-    st.markdown(f"""<div style="display:flex; align-items:center;">{logo_html}<div><div style="font-size:24px; font-weight:bold; color:#202124; line-height:1.2;">Agence Pro'AGOrA</div><div style="font-size:12px; color:#5F6368;">Superviseur IA v3.0 (Expert)</div></div></div>""", unsafe_allow_html=True)
+    st.markdown(f"""<div style="display:flex; align-items:center;">{logo_html}<div><div style="font-size:24px; font-weight:bold; color:#202124; line-height:1.2;">Agence Pro'AGOrA</div><div style="font-size:12px; color:#5F6368;">Superviseur IA v3.0</div></div></div>""", unsafe_allow_html=True)
 
-# BOUTONS RESSOURCES
 with c2:
     if st.session_state.get("current_context_doc"):
         doc = st.session_state.current_context_doc
@@ -425,7 +447,7 @@ with c4:
         st.link_button("📂 ENT", "https://cas.ent.auvergnerhonealpes.fr/login?service=https%3A%2F%2Fglieres.ent.auvergnerhonealpes.fr%2Fsg.do%3FPROC%3DPAGE_ACCUEIL")
 
 with c5:
-    st.button(f"👤", help=user_label, disabled=True, use_container_width=True)
+    st.button(f"👤", help=f"Connecté : {student_name}", disabled=True, use_container_width=True)
 
 st.markdown("<hr style='margin: 0 0 20px 0;'>", unsafe_allow_html=True)
 
