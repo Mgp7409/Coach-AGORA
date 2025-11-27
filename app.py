@@ -11,9 +11,9 @@ from groq import Groq
 # --- 0. DÉPENDANCES & SÉCURITÉ ---
 try:
     from docx import Document
-    from docx.shared import RGBColor # <--- AJOUT IMPORTANT ICI
+    from docx.shared import RGBColor
 except ImportError:
-    st.error("⚠️ ERREUR CRITIQUE : Le module 'python-docx' manque. Ajoutez 'python-docx' au fichier requirements.txt")
+    st.error("⚠️ ERREUR CRITIQUE : Le module 'python-docx' manque.")
     st.stop()
 
 try:
@@ -32,16 +32,13 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- 2. STYLE CSS (FUSION A & B) ---
+# --- 2. STYLE CSS ---
 st.markdown("""
 <style>
-    /* POLICE & STYLE GLOBAL */
     html, body, [class*="css"] {
         font-family: 'Segoe UI', 'Roboto', Helvetica, Arial, sans-serif;
         font-size: 16px;
     }
-
-    /* ALERTE ROUGE (Issue du Code A) */
     .sidebar-alert {
         padding: 1rem;
         background-color: #ffebee;
@@ -54,8 +51,6 @@ st.markdown("""
         text-align: center;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
-
-    /* FOOTER FIXE */
     .fixed-footer {
         position: fixed;
         left: 0;
@@ -69,14 +64,10 @@ st.markdown("""
         border-top: 1px solid #e1e4e8;
         z-index: 99999;
     }
-    
-    /* REMONTER LA BARRE DE CHAT */
     [data-testid="stBottom"] {
         bottom: 50px !important;
         padding-bottom: 0px !important;
     }
-    
-    /* HEADERS */
     header {background-color: transparent !important;}
 </style>
 """, unsafe_allow_html=True)
@@ -88,8 +79,10 @@ if "xp" not in st.session_state:
     st.session_state.xp = 0
 if "grade" not in st.session_state:
     st.session_state.grade = "👶 Stagiaire"
+if "final_feedback" not in st.session_state:
+    st.session_state.final_feedback = None
 
-# SYSTÈME DE GRADES (Gamification)
+# SYSTÈME DE GRADES
 GRADES = {
     0: "👶 Stagiaire",
     100: "👦 Assistant(e) Junior",
@@ -112,7 +105,32 @@ def update_xp(amount: int):
     else:
         st.toast(f"+{amount} XP", icon="⭐")
 
-# --- 4. OUTILS IA (GROQ) ---
+# --- 4. DIFFÉRENCIATION PÉDAGOGIQUE ---
+PROFILES = {
+    "Soutien / DYS": """
+    ADAPTATION : L'élève a des difficultés ou est DYS.
+    - Fais des phrases très courtes.
+    - Mets les mots-clés en **gras**.
+    - Utilise systématiquement des listes à puces.
+    - Sois très encourageant.
+    - Décompose chaque consigne en étape 1, 2, 3.
+    """,
+    "Standard": """
+    ADAPTATION : L'élève a un niveau standard.
+    - Utilise un ton professionnel bienveillant.
+    - Guide l'élève s'il bloque.
+    - Utilise le vocabulaire professionnel.
+    """,
+    "Expert / Autonomie": """
+    ADAPTATION : L'élève est performant.
+    - Sois exigeant.
+    - Ne donne pas la réponse, pose des questions pointues ("Quel outil as-tu utilisé pour... ?").
+    - Exige un vocabulaire technique précis.
+    - Pousse-le à critiquer sa propre pratique.
+    """
+}
+
+# --- 5. OUTILS IA (GROQ) ---
 def get_api_keys_list():
     if "groq_keys" in st.secrets:
         return st.secrets["groq_keys"]
@@ -145,10 +163,9 @@ def query_groq_with_rotation(messages):
         except: continue
     return None, "SATURATION SERVICE."
 
-# --- 5. OUTILS FICHIERS (LECTURE & ÉCRITURE) ---
+# --- 6. OUTILS FICHIERS ---
 
 def extract_text_from_file(uploaded_file) -> str:
-    """Lit Word, Excel ou CSV"""
     try:
         filename = uploaded_file.name.lower()
         if filename.endswith(".docx"):
@@ -165,30 +182,29 @@ def extract_text_from_file(uploaded_file) -> str:
     except Exception as e:
         return f"Erreur de lecture : {str(e)}"
 
-def create_docx_history(messages, student_name):
-    """Génère un fichier Word propre de la conversation"""
+def create_docx_history(messages, student_name, final_feedback=None):
     doc = Document()
     doc.add_heading(f"Restitution PFMP - {student_name}", 0)
     doc.add_paragraph(f"Date : {datetime.now().strftime('%d/%m/%Y %H:%M')}")
-    doc.add_paragraph("---")
+    
+    if final_feedback:
+        doc.add_heading("BILAN PÉDAGOGIQUE (IA)", level=1)
+        doc.add_paragraph(final_feedback)
+        doc.add_page_break()
 
+    doc.add_heading("Historique de la conversation", level=1)
     for msg in messages:
-        if msg["role"] == "system":
-            continue
-        
+        if msg["role"] == "system": continue
         role_name = "SUPERVISEUR (IA)" if msg["role"] == "assistant" else student_name.upper()
         p = doc.add_paragraph()
         runner = p.add_run(f"{role_name} :")
         runner.bold = True
-        
-        # --- CORRECTION COULEUR ICI ---
         if msg["role"] == "assistant":
-            runner.font.color.rgb = RGBColor(0, 0, 255) # Bleu IA
+            runner.font.color.rgb = RGBColor(0, 0, 255)
         else:
-            runner.font.color.rgb = RGBColor(0, 100, 0) # Vert Élève
-        
+            runner.font.color.rgb = RGBColor(0, 100, 0)
         doc.add_paragraph(msg["content"])
-        doc.add_paragraph("") # Espace
+        doc.add_paragraph("") 
         
     buffer = BytesIO()
     doc.save(buffer)
@@ -196,179 +212,179 @@ def create_docx_history(messages, student_name):
     return buffer
 
 def clean_text_for_audio(text: str) -> str:
-    text = re.sub(r"[\*_]{1,3}", "", text) # Enlève le gras/italique
-    text = re.sub(r"\[.*?\]", "", text)     # Enlève les crochets
-    return text[:500] # Limite pour l'audio
+    text = re.sub(r"[\*_]{1,3}", "", text)
+    text = re.sub(r"\[.*?\]", "", text)
+    return text[:500]
 
-# --- 6. PROMPT SYSTÈME (RETOUR D'EXPÉRIENCE) ---
-SYSTEM_PROMPT = """
+# --- 7. PROMPT SYSTÈME DYNAMIQUE ---
+def get_system_prompt(profile_key):
+    differentiation_instruction = PROFILES.get(profile_key, PROFILES["Standard"])
+    
+    base_prompt = f"""
 RÔLE : Tu es le Superviseur Professionnel de l'élève (Bac Pro AGOrA).
-TON : Professionnel, encourageant, exigeant sur le vocabulaire technique.
-OBJECTIF : Aider l'élève à analyser son vécu en entreprise (PFMP) et à structurer son compte-rendu.
+OBJECTIF : Aider l'élève à analyser son vécu (PFMP) selon la méthode de l'EXPLICITATION (Vermersch).
+Tu ne cherches pas le "bon résultat", mais à comprendre le CHEMINEMENT de l'élève.
 
-RÈGLES CRITIQUES (SÉCURITÉ) :
-1. Si l'élève mentionne un vrai nom de famille (client, collègue) ou des données confidentielles (CA précis, codes d'accès), stoppe-le IMMÉDIATEMENT et demande d'anonymiser.
-2. Ne fais jamais le travail de rédaction à sa place. Pose des questions pour lui faire trouver les réponses.
+{differentiation_instruction}
 
-MÉTHODE PÉDAGOGIQUE :
-1. Demande d'abord le contexte (Type d'entreprise, Service, Tâches réalisées).
-2. Si l'élève envoie un document, analyse-le :
-   - Points forts.
-   - Points faibles (orthographe, structure, vocabulaire trop familier).
-   - Manques (Outils numériques utilisés ? Procédures respectées ?).
-3. Guide-le vers les compétences du référentiel (Accueil, Gestion administrative, Projets...).
-
-FORMAT DE RÉPONSE :
-- Utilise des listes à puces.
-- Sois concis.
+CONSIGNES PÉDAGOGIQUES (EXPLICITATION) :
+1. Questionne sur le "COMMENT" : "Par quoi as-tu commencé ?", "Qu'as-tu fait juste après ?", "Comment savais-tu que... ?".
+2. Si l'élève est vague ("J'ai fait un courrier"), demande des détails procéduraux ("Quel logiciel ?", "A partir de quel modèle ?", "Qui t'a donné les infos ?").
+3. SÉCURITÉ : Stoppe immédiatement toute donnée personnelle réelle.
 """
+    return base_prompt
 
 INITIAL_MESSAGE = """
 👋 **Bonjour.**
 
-Je suis ton Superviseur Virtuel. Nous allons travailler sur ton **Retour d'Expérience de Stage (PFMP)**.
+Je suis ton Superviseur Virtuel. Nous allons faire le point sur ton stage.
 
-Tu peux :
-1. **Télécharger ton brouillon** (Word, Excel) via le menu de gauche.
-2. Ou commencer par me décrire ton entreprise et tes missions ici.
-
-*Rappel : Utilise des noms fictifs pour les personnes.*
+Raconte-moi une activité importante que tu as réalisée. Essaie d'être précis sur **comment** tu as fait.
 """
 
 if not st.session_state.messages:
     st.session_state.messages.append({"role": "assistant", "content": INITIAL_MESSAGE})
 
-# --- 7. INTERFACE GRAPHIQUE ---
+# --- 8. INTERFACE GRAPHIQUE ---
 
 st.title("🎓 Restitution PFMP & Analyse de Pratique")
 
-# A. BARRE LATÉRALE
 with st.sidebar:
     if os.path.exists(PAGE_ICON):
         st.image(PAGE_ICON, width=80)
-    else:
-        st.header("Profil Élève")
-
-    # --- ZONE 1 : PROFIL & GAMIFICATION ---
+    
     st.markdown(f"### 🏆 {st.session_state.grade}")
     st.progress(min(st.session_state.xp / 1000, 1.0))
     student_name = st.text_input("Ton Prénom :", placeholder="Ex: Thomas")
     
+    # --- SÉLECTEUR DE DIFFÉRENCIATION ---
+    st.markdown("### ⚙️ Niveau d'aide")
+    selected_profile = st.selectbox(
+        "Choisis ton profil :",
+        ["Soutien / DYS", "Standard", "Expert / Autonomie"],
+        index=1
+    )
+
     st.divider()
 
-    # --- ZONE 2 : SÉCURITÉ (CODE A) ---
     st.markdown("""
     <div class="sidebar-alert">
-    🚫 <b>RÈGLE D'OR</b><br>
-    Ne jamais saisir de données personnelles réelles (Noms de clients, Numéros de téléphone, Mots de passe).
-    <br><b>ANONYMISE TOUT !</b>
+    🚫 <b>ANONYMISE TOUT !</b><br>
+    Pas de vrais noms, pas de vrais téléphones.
     </div>
     """, unsafe_allow_html=True)
 
     st.divider()
 
-    # --- ZONE 3 : IMPORT DOC ---
-    st.subheader("📂 Analyser un travail")
-    uploaded_file = st.file_uploader("Ton rapport/brouillon (Word, Excel)", type=['docx', 'xlsx', 'xls', 'csv'])
+    st.subheader("📂 Analyser un document")
+    uploaded_file = st.file_uploader("Rapport/Brouillon", type=['docx', 'xlsx', 'xls', 'csv'])
     
     if uploaded_file and student_name:
         if st.button("🚀 Envoyer à l'analyse"):
-            with st.spinner("Lecture du document..."):
-                text_content = extract_text_from_file(uploaded_file)
-                prompt_analysis = f"Voici mon travail (Fichier {uploaded_file.name}) : \n\n{text_content}"
-                st.session_state.messages.append({"role": "user", "content": prompt_analysis})
-                update_xp(50) # Bonus pour upload
+            with st.spinner("Lecture..."):
+                text = extract_text_from_file(uploaded_file)
+                st.session_state.messages.append({"role": "user", "content": f"Voici mon document ({uploaded_file.name}) :\n\n{text}"})
+                update_xp(50)
                 st.rerun()
-    elif uploaded_file:
-        st.warning("Indique ton prénom d'abord.")
 
     st.divider()
 
-    # --- ZONE 4 : EXPORT (CODE B + WORD) ---
-    st.subheader("💾 Sauvegarder")
-    
-    if student_name and len(st.session_state.messages) > 1:
-        # Export Word
-        docx_file = create_docx_history(st.session_state.messages, student_name)
+    # --- BOUTON DE FIN (FEEDBACK) ---
+    st.subheader("🏁 Fin de séance")
+    if st.button("Générer le Bilan Pédagogique", type="primary"):
+        if len(st.session_state.messages) < 4:
+            st.warning("Discute un peu plus avant de générer le bilan.")
+        else:
+            with st.spinner("Rédaction du bilan d'explicitation..."):
+                # Prompt spécifique pour le bilan final
+                history_txt = "\n".join([m['content'] for m in st.session_state.messages])
+                prompt_bilan = f"""
+                Agis comme un expert en pédagogie. Analyse cette conversation d'explicitation avec un élève de Bac Pro.
+                
+                CONVERSATION :
+                {history_txt}
+                
+                Génère un bilan structuré adressé à l'élève (utilise le "TU") :
+                1. **Contexte identifié** : Où et quoi ?
+                2. **Procédure décrite** : L'élève a-t-il su expliquer "comment" il a fait ? (Oui/Non/Partiellement).
+                3. **Points forts détectés** : Vocabulaire, outils, posture pro.
+                4. **Conseil d'amélioration** : Sur quoi progresser pour le CCF.
+                
+                Sois bienveillant et constructif.
+                """
+                response_bilan, _ = query_groq_with_rotation([{"role": "user", "content": prompt_bilan}])
+                st.session_state.final_feedback = response_bilan
+                st.rerun()
+
+    # --- EXPORT ---
+    if st.session_state.final_feedback:
+        st.success("Bilan généré ! (Voir en bas de page)")
+        docx_file = create_docx_history(st.session_state.messages, student_name, st.session_state.final_feedback)
         st.download_button(
-            label="📄 Télécharger en Word (.docx)",
+            "📄 Télécharger Bilan + Chat (.docx)",
             data=docx_file,
-            file_name=f"Restitution_PFMP_{student_name}.docx",
+            file_name=f"Bilan_PFMP_{student_name}.docx",
             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         )
-        
-        # Export CSV (Technique)
-        chat_df = pd.DataFrame(st.session_state.messages)
-        csv_data = chat_df.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            label="🛠️ Sauvegarde Technique (.csv)",
-            data=csv_data,
-            file_name=f"backup_{student_name}.csv",
-            mime="text/csv"
-        )
     
-    # Bouton Reset
-    if st.button("🗑️ Nouvelle Session"):
+    if st.button("🗑️ Reset"):
         st.session_state.messages = [{"role": "assistant", "content": INITIAL_MESSAGE}]
         st.session_state.xp = 0
+        st.session_state.final_feedback = None
         st.rerun()
 
-# B. ZONE DE CHAT
+# CHAT
 chat_container = st.container()
 with chat_container:
-    for i, msg in enumerate(st.session_state.messages):
+    for msg in st.session_state.messages:
         role_avatar = "🤖" if msg["role"] == "assistant" else "🧑‍🎓"
         with st.chat_message(msg["role"], avatar=role_avatar):
-            # Affichage conditionnel pour ne pas polluer avec le texte brut du fichier
-            if "Voici mon travail (Fichier" in msg["content"]:
-                st.info(f"📄 *Document envoyé pour analyse.*")
+            if "Voici mon document" in msg["content"]:
+                st.info("📄 *Document transmis.*")
             else:
                 st.markdown(msg["content"])
-                
-                # Option Lecture Audio (TTS) si module présent
                 if msg["role"] == "assistant" and HAS_AUDIO:
-                    col_audio, _ = st.columns([1, 5])
-                    with col_audio:
-                        if st.button("🔊", key=f"tts_{i}", help="Lire ce message"):
-                            try:
-                                tts = gTTS(clean_text_for_audio(msg["content"]), lang="fr")
-                                buf = BytesIO()
-                                tts.write_to_fp(buf)
-                                st.audio(buf, format="audio/mp3", start_time=0)
-                            except:
-                                st.warning("Audio indisponible.")
+                    if st.button("🔊", key=str(random.randint(0,100000))): # Clé unique simple
+                        try:
+                            tts = gTTS(clean_text_for_audio(msg["content"]), lang="fr")
+                            buf = BytesIO()
+                            tts.write_to_fp(buf)
+                            st.audio(buf, format="audio/mp3", start_time=0)
+                        except: pass
 
-    st.write("<br><br>", unsafe_allow_html=True) # Espace pour le footer
+# AFFICHAGE DU FEEDBACK FINAL
+if st.session_state.final_feedback:
+    st.markdown("---")
+    st.markdown("## 📝 Bilan de l'entretien d'explicitation")
+    st.info(st.session_state.final_feedback)
 
-# C. FOOTER PERMANENT
+st.write("<br><br>", unsafe_allow_html=True)
+
+# FOOTER
 st.markdown("""
 <div class="fixed-footer">
-    ℹ️ <b>Outil Pédagogique (IA)</b> - Vérifiez toujours les informations avec votre professeur. - <b>Aucune donnée personnelle ne doit être saisie.</b>
+    ℹ️ <b>IA Pédagogique</b> - Différenciation activée. Ne pas saisir de données réelles.
 </div>
 """, unsafe_allow_html=True)
 
-# D. SAISIE UTILISATEUR
-if user_input := st.chat_input("Réponds au superviseur ici..."):
+# INPUT
+if user_input := st.chat_input("Réponds au superviseur..."):
     if not student_name:
-        st.toast("⚠️ Indique ton prénom dans le menu de gauche !", icon="👉")
+        st.toast("⚠️ Indique ton prénom !", icon="👉")
     else:
-        # Ajout message utilisateur
         st.session_state.messages.append({"role": "user", "content": user_input})
-        update_xp(10) # XP par interaction
+        update_xp(10)
         
-        # Réponse IA
         with st.chat_message("assistant", avatar="🤖"):
-            with st.spinner("Analyse pédagogique..."):
-                # Construction du contexte pour l'IA
-                messages_payload = [{"role": "system", "content": SYSTEM_PROMPT}]
-                # On garde les 8 derniers messages pour la mémoire contextuelle
+            with st.spinner("Analyse en cours..."):
+                # On utilise le prompt dynamique selon le profil choisi
+                current_system_prompt = get_system_prompt(selected_profile)
+                
+                messages_payload = [{"role": "system", "content": current_system_prompt}]
                 messages_payload.extend(st.session_state.messages[-8:])
                 
-                response_content, model_used = query_groq_with_rotation(messages_payload)
-                
-                if not response_content:
-                    response_content = "⚠️ Désolé, le service est momentanément saturé. Réessaie."
-                
+                response_content, _ = query_groq_with_rotation(messages_payload)
+                if not response_content: response_content = "⚠️ Erreur IA."
                 st.markdown(response_content)
         
         st.session_state.messages.append({"role": "assistant", "content": response_content})
