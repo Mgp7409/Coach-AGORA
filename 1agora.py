@@ -128,7 +128,6 @@ st.markdown(
         padding-top: 1rem;
         max-width: 100%;
     }}
-
     .pgi-container {{
         border: 1px solid #dfe1e5;
         border-radius: 8px;
@@ -145,19 +144,6 @@ st.markdown(
         align-items: center;
         gap: 10px;
     }}
-
-    button[kind="primary"] {{
-        background: linear-gradient(135deg, #0F9D58 0%, #00C9FF 100%);
-        color: white !important;
-        border: none;
-    }}
-
-    [data-testid="stChatMessage"] {{
-        padding: 1rem;
-        border-radius: 12px;
-        margin-bottom: 0.5rem;
-    }}
-
     .fixed-footer {{
         position: fixed;
         left: 0;
@@ -169,10 +155,6 @@ st.markdown(
         padding: 6px;
         font-size: 11px;
         z-index: 99999;
-    }}
-    [data-testid="stBottom"] {{
-        bottom: 30px !important;
-        padding-bottom: 10px;
     }}
 </style>
 """,
@@ -191,6 +173,7 @@ def get_api_keys_list():
 def query_groq_with_rotation(messages):
     available_keys = get_api_keys_list()
     if not available_keys:
+        st.error("Aucune clé Groq trouvée dans st.secrets.")
         return None, "ERREUR CONFIG"
 
     keys = list(available_keys)
@@ -209,10 +192,13 @@ def query_groq_with_rotation(messages):
                         max_tokens=1024,
                     )
                     return chat.choices[0].message.content, model
-                except Exception:
+                except Exception as e:
+                    st.error(f"Erreur modèle {model} : {e}")
                     continue
-        except Exception:
+        except Exception as e:
+            st.error(f"Erreur connexion Groq : {e}")
             continue
+
     return None, "SATURATION"
 
 # --- 7. OUTILS FICHIERS ---
@@ -248,18 +234,18 @@ def add_notification(msg: str):
     ts = datetime.now().strftime("%H:%M")
     st.session_state.notifications.insert(0, f"{ts} - {msg}")
 
-# --- 8. SOMMAIRE OFFICIEL (aligné manuel Foucher) ---
+# --- 8. SOMMAIRE OFFICIEL (aligné manuel) ---
 
 DB_OFFICIELLE = {
     "La gestion opérationnelle des espaces de travail": {
         "Dossier 1 – Organiser le fonctionnement des espaces de travail":
-            "Écoactif Solidaire : réorganisation des locaux, prise en compte des nouveaux modes de travail et des équipements nécessaires.",
+            "Écoactif Solidaire : réorganisation des locaux, nouveaux modes de travail et équipements nécessaires.",
         "Dossier 2 – Organiser l’environnement numérique d’un service":
-            "Écoactif Solidaire : réseaux, outils numériques et environnement pour les comptables (coworking + télétravail).",
+            "Écoactif Solidaire : réseaux, outils numériques et environnement pour les comptables.",
         "Dossier 3 – Gérer les ressources partagées de l’organisation":
             "Écoactif Solidaire : fournitures, salles, matériels partagés, procédures et bases de données.",
         "Dossier 4 – Organiser le partage de l’information":
-            "Écoactif Solidaire : communication interne jugée insuffisante, adoption d’un outil collaboratif."
+            "Écoactif Solidaire : communication interne insuffisante, adoption d’un outil collaboratif."
     },
     "Le traitement de formalités administratives liées aux relations avec les partenaires": {
         "Dossier 5 – Participer au lancement d’une nouvelle gamme":
@@ -271,7 +257,7 @@ DB_OFFICIELLE = {
     },
     "Le suivi administratif des relations avec le personnel": {
         "Dossier 8 – Participer au recrutement du personnel":
-            "Léa Nature : recrutement d’un(e) commercial(e) beauté/hygiène bio, profil de poste, sélection.",
+            "Léa Nature : recrutement d’un(e) commercial(e) sédentaire, profil de poste, sélection.",
         "Dossier 9 – Participer à l’intégration du personnel":
             "Léa Nature : accueil du nouveau salarié, parcours d’intégration, motivation et cohésion.",
         "Dossier 10 – Actualiser les dossiers du personnel":
@@ -279,7 +265,7 @@ DB_OFFICIELLE = {
     }
 }
 
-# --- 9. FICHES D’AIDE (résumé très court des situations) ---
+# --- 9. FICHES D’AIDE ---
 
 AIDES_DOSSIERS = {
     "Dossier 1 – Organiser le fonctionnement des espaces de travail": {
@@ -384,7 +370,7 @@ AIDES_DOSSIERS = {
     }
 }
 
-# --- 10. GÉNÉRATEUR PGI PAR DOSSIER (données fictives mais cohérentes) ---
+# --- 10. PGI PAR DOSSIER ---
 
 def generate_fake_pgi_data(dossier_name: str) -> pd.DataFrame:
     rows = []
@@ -514,7 +500,7 @@ def generate_fake_pgi_data(dossier_name: str) -> pd.DataFrame:
 
     return pd.DataFrame(rows)
 
-# --- 11. DIFFÉRENCIATION ÉLÈVES & PROMPTS IA ---
+# --- 11. DIFFÉRENCIATION & PROMPTS IA ---
 
 def build_differentiation_instruction(profil: str) -> str:
     if profil == "Accompagnement renforcé":
@@ -673,6 +659,13 @@ BOT_AVATAR = LOGO_AGORA if os.path.exists(LOGO_AGORA) else "🤖"
 
 # --- SIDEBAR ---
 with st.sidebar:
+    # DEBUG GROQ
+    try:
+        ks = get_api_keys_list()
+        st.caption(f"🔍 Debug IA : {len(ks)} clé(s) Groq détectée(s).")
+    except Exception as e:
+        st.error(f"Erreur lecture des clés Groq : {e}")
+
     if os.path.exists(LOGO_LYCEE):
         st.image(LOGO_LYCEE, width=100)
     else:
@@ -837,7 +830,7 @@ with c4:
 
 st.markdown("<hr style='margin: 0 0 10px 0;'>", unsafe_allow_html=True)
 
-# --- FICHE D'AIDE (si dispo) ---
+# --- FICHE D'AIDE ---
 
 dossier_courant = st.session_state.dossier
 fiche_aide = AIDES_DOSSIERS.get(dossier_courant)
