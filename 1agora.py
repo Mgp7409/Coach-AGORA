@@ -183,27 +183,38 @@ def add_notification(msg):
     ts = datetime.now().strftime("%H:%M")
     st.session_state.notifications.insert(0, f"{ts} - {msg}")
 
-# --- 8. SOMMAIRE OFFICIEL FOUCHER ---
+# --- 8. SOMMAIRE OFFICIEL FOUCHER (NOUVELLE VERSION) ---
+
 DB_OFFICIELLE = {
-    "1. RELATIONS CLIENTS & USAGERS": {
-        "Dossier 1 : Traiter les demandes": "Qualifier la demande, orienter, répondre (mail/tel).",
-        "Dossier 2 : Assurer le suivi des opérations courantes": "Mise à jour de dossier, suivi avancement.",
-        "Dossier 3 : Traiter les réclamations courantes": "Analyser le motif, proposer une solution commerciale.",
-        "Dossier 4 : Assurer le suivi de la satisfaction": "Enquête satisfaction, analyse résultats."
+    "1. La gestion opérationnelle des espaces de travail": {
+        "1 Organiser le fonctionnement des espaces de travail":
+            "Proposer un environnement de travail adapté et sélectionner les équipements nécessaires.",
+        "2 Organiser l'environnement numérique d'un service":
+            "Proposer un environnement numérique adapté, recenser les contraintes réglementaires et planifier la mise en œuvre de l'environnement du service comptable.",
+        "3 Gérer les ressources partagées de l'organisation":
+            "Mettre en place une nouvelle gestion du partage des fournitures de bureau et proposer de nouveaux outils de partage des ressources physiques.",
+        "4 Organiser le partage de l'information":
+            "Analyser la communication interne, définir une nouvelle stratégie de communication et paramétrer l’outil numérique collaboratif."
     },
-    "2. ORGANISATION & PRODUCTION": {
-        "Dossier 5 : Assurer le suivi des approvisionnements": "État des stocks, commande fournisseur, livraison.",
-        "Dossier 6 : Assurer le suivi des commandes": "Réception commande client, vérification dispo, préparation.",
-        "Dossier 7 : Assurer le suivi de la facturation": "Établir la facture depuis un BL, TVA, remise.",
-        "Dossier 8 : Assurer le suivi des règlements": "Suivi échéances, relance amiable, mise en demeure."
+
+    "2. Le traitement de formalités administratives liées aux relations avec les partenaires": {
+        "5 Participer au lancement d'une nouvelle gamme":
+            "Préparer le planigramme des tâches liées au lancement, négocier les conditions de vente auprès du fournisseur et communiquer sur le lancement.",
+        "6 Organiser et suivre des réunions":
+            "Organiser une réunion de service et préparer / suivre une visioconférence.",
+        "7 Organiser un déplacement":
+            "Organiser les modalités du déplacement et préparer les formalités administratives."
     },
-    "3. ADMINISTRATION DU PERSONNEL": {
-        "Dossier 9 : Assurer le suivi de la carrière du personnel": "Annonce, tri CV, convocation, formation.",
-        "Dossier 10 : Assurer le suivi de l'activité du personnel": "Planning, congés, heures supplémentaires.",
-        "Dossier 11 : Participer à l'activité sociale": "Organisation événement, communication interne (CSE)."
+
+    "3. Le suivi administratif des relations avec le personnel": {
+        "8 Participer au recrutement du personnel":
+            "Préparer le recrutement et sélectionner le ou la candidat(e).",
+        "9 Participer à l'intégration du personnel":
+            "Préparer l’accueil du(de la) nouvel(le) salarié(e) et développer la motivation et la cohésion.",
+        "10 Actualiser les dossiers du personnel":
+            "Établir un contrat de travail, actualiser le registre du personnel et établir un avenant au contrat de travail."
     }
 }
-
 # --- 9. GÉNÉRATEUR PGI INTELLIGENT (Par Dossier) ---
 def generate_fake_pgi_data(dossier_name):
     rows = []
