@@ -193,7 +193,7 @@ def query_groq_with_rotation(messages):
                     )
                     return chat.choices[0].message.content, model
                 except Exception as e:
-                    st.error(f"Erreur modèle {model} : {e}")
+                    # st.error(f"Erreur modèle {model} : {e}") # Debug only
                     continue
         except Exception as e:
             st.error(f"Erreur connexion Groq : {e}")
@@ -294,7 +294,7 @@ AIDES_DOSSIERS = {
         "missions": [
             "Analyser la situation actuelle de partage des ressources.",
             "Proposer une nouvelle organisation (stock, réservations, règles d’usage).",
-            "Mettre en forme un outil de suivi ou de réservation (tableur ou base)."
+            "Mettre en forme un outil de suivi ou de réservation (tableur ou base).",
         ],
         "types_production": "Tableau d’inventaire, formulaire de réservation, procédure interne."
     },
@@ -552,9 +552,9 @@ TABLEAUX :
 INITIAL_MESSAGE = """
 👋 **Bienvenue dans Agence Pro'AGOrA**
 
-1. Choisis la **Partie** et le **Dossier** dans la barre de gauche.  
-2. Sélectionne ton **Profil d’élève**.  
-3. Clique sur **LANCER LA MISSION**.  
+1. Choisis la **Partie** et le **Dossier** dans la barre de gauche.
+2. Sélectionne ton **Profil d’élève**.
+3. Clique sur **LANCER LA MISSION**.
 4. Lis le tableau (PGI) et la fiche d’aide si elle est affichée, puis réponds dans le chat.
 """
 
@@ -579,7 +579,7 @@ def lancer_mission(prenom: str, profil: str):
     aide_txt = ""
     if aide:
         aide_txt = f"""
-RÉSUMÉ ENSEIGNANT (contexte dossier) :
+RÉSUMÉ ENSEIGNANT (contexte dossier):
 - Situation : {aide['situation']}
 - Contexte : {aide['contexte']}
 - Missions possibles : {", ".join(aide['missions'])}
