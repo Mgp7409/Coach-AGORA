@@ -33,10 +33,10 @@ st.set_page_config(
 
 # --- 2. GESTION ÉTAT ---
 if "messages" not in st.session_state: st.session_state.messages = []
-if "logs" not in st.session_state: st.session_state.logs = []
 if "notifications" not in st.session_state: st.session_state.notifications = ["Système prêt."]
 if "current_context_doc" not in st.session_state: st.session_state.current_context_doc = None
 if "pgi_data" not in st.session_state: st.session_state.pgi_data = None
+if "bilan_ready" not in st.session_state: st.session_state.bilan_ready = None
 
 # GAMIFICATION
 if "xp" not in st.session_state: st.session_state.xp = 0
@@ -181,241 +181,228 @@ def add_notification(msg):
     ts = datetime.now().strftime("%H:%M")
     st.session_state.notifications.insert(0, f"{ts} - {msg}")
 
-# --- 8. DONNÉES OFFICIELLES DU LIVRE (SOMMAIRE) ---
-DB_PREMIERE = {
+# --- 8. BASE DE DONNÉES CONFORME FOUCHER ---
+DB_OFFICIELLE = {
     "1. RELATIONS CLIENTS & USAGERS": {
-        "D1. Traitement des demandes": {
-            "competence": "Accueillir, identifier le besoin, orienter, répondre.",
-            "procedure": "1. Qualification de la demande -> 2. Recherche d'infos (PGI) -> 3. Réponse (Mail/Tel).",
-            "doc": None
-        },
-        "D2. Suivi des opérations": {
-            "competence": "Suivi de dossier, mise à jour PGI.",
-            "procedure": "1. Consultation dossier -> 2. Vérification avancement -> 3. Information client.",
-            "doc": None
-        },
-        "D3. Traitement des réclamations": {
-            "competence": "Recevoir la plainte, analyser, proposer une solution.",
-            "procedure": "1. Analyse du motif -> 2. Vérification validité -> 3. Proposition commerciale/technique.",
-            "doc": {"type": "Mail Réclamation", "titre": "Client Mécontent", "contexte": "Livraison incomplète.", "missions": ["Répondre au mail"]}
-        },
-        "D4. Suivi de la satisfaction": {
-            "competence": "Enquêtes, statistiques, fidélisation.",
-            "procedure": "1. Collecte avis -> 2. Analyse résultats (Tableau) -> 3. Actions correctives.",
-            "doc": None
-        }
+        "Dossier 1 : Traiter les demandes": "Qualifier la demande, orienter, répondre (mail/tel).",
+        "Dossier 2 : Assurer le suivi des opérations courantes": "Mise à jour de dossier, suivi avancement.",
+        "Dossier 3 : Traiter les réclamations courantes": "Analyser le motif, proposer une solution commerciale.",
+        "Dossier 4 : Assurer le suivi de la satisfaction": "Enquête satisfaction, analyse résultats."
     },
     "2. ORGANISATION & PRODUCTION": {
-        "D5. Suivi des approvisionnements": {
-            "competence": "Stocks, commandes fournisseurs, réception.",
-            "procedure": "1. Inventaire -> 2. Identification besoins -> 3. Bon de commande fournisseur.",
-            "doc": None
-        },
-        "D6. Suivi des commandes": {
-            "competence": "Traitement commande client, bon de livraison.",
-            "procedure": "1. Réception BC -> 2. Vérification stock -> 3. Préparation BL.",
-            "doc": None
-        },
-        "D7. Suivi de la facturation": {
-            "competence": "Établir facture, TVA, avoir.",
-            "procedure": "1. Reprise du BL -> 2. Création Facture (Mentions obligatoires) -> 3. Envoi.",
-            "doc": None
-        },
-        "D8. Suivi des règlements": {
-            "competence": "Suivi paiements, relances impayés.",
-            "procedure": "1. Pointage banque -> 2. Identification retards -> 3. Relance (Niveau 1, 2, 3).",
-            "doc": None
-        }
+        "Dossier 5 : Assurer le suivi des approvisionnements": "État des stocks, commande fournisseur, livraison.",
+        "Dossier 6 : Assurer le suivi des commandes": "Réception commande client, vérification dispo, préparation.",
+        "Dossier 7 : Assurer le suivi de la facturation": "Établir la facture depuis un BL, TVA, remise.",
+        "Dossier 8 : Assurer le suivi des règlements": "Suivi échéances, relance amiable, mise en demeure."
     },
     "3. ADMINISTRATION DU PERSONNEL": {
-        "D9. Suivi de la carrière": {
-            "competence": "Recrutement, formation, évaluation.",
-            "procedure": "1. Fiche de poste -> 2. Annonce -> 3. Tri CV -> 4. Convocation.",
-            "doc": {"type": "Besoin RH", "titre": "Recrutement Assistant", "contexte": "Départ retraite.", "missions": ["Créer l'annonce"]}
-        },
-        "D10. Suivi de l'activité": {
-            "competence": "Temps de travail, congés, absences.",
-            "procedure": "1. Réception demande -> 2. Vérification solde -> 3. Validation/Refus.",
-            "doc": None
-        },
-        "D11. Participation activité sociale": {
-            "competence": "Organiser événements, communication interne.",
-            "procedure": "1. Budget -> 2. Choix prestataire -> 3. Note de service.",
-            "doc": None
-        }
+        "Dossier 9 : Assurer le suivi de la carrière du personnel": "Annonce, tri CV, convocation, formation.",
+        "Dossier 10 : Assurer le suivi de l'activité du personnel": "Planning, congés, heures supplémentaires.",
+        "Dossier 11 : Participer à l'activité sociale": "Organisation événement, communication interne (CSE)."
     }
 }
 
-# --- 9. GÉNÉRATEUR PGI CORRIGÉ ---
-def get_pgi_data(theme, dossier):
-    """Génère des données spécifiques au dossier choisi"""
+# --- 9. GÉNÉRATEUR PGI ALIGNÉ ---
+def generate_fake_pgi_data(dossier_name):
     rows = []
     
-    # THEME 1 : RELATIONS CLIENTS
-    if "RELATIONS CLIENTS" in theme:
-        if "réclamations" in dossier:
-            # Tableau des tickets SAV
-            for i in range(5):
-                rows.append({
-                    "N° Ticket": f"SAV-{random.randint(100,999)}",
-                    "Client": f"{random.choice(NOMS)} {random.choice(['SA', 'SARL'])}",
-                    "Motif": random.choice(["Retard", "Casse", "Erreur Réf", "Panne"]),
-                    "Statut": random.choice(["Nouveau", "En cours", "Clôturé"])
-                })
-        elif "satisfaction" in dossier:
-            # Résultats enquête
-            for i in range(5):
-                rows.append({
-                    "Critère": random.choice(["Accueil", "Délai", "Qualité Produit", "SAV"]),
-                    "Note Moyenne": f"{random.randint(2,5)}/5",
-                    "Commentaire": random.choice(["Très bien", "À améliorer", "Parfait", "Déçu"])
-                })
-        else: # Demandes / Opérations
-            for i in range(6):
-                rows.append({
-                    "Client": f"Client {random.randint(1,50)}",
-                    "Dernier Contact": "26/11/2024",
-                    "Objet": random.choice(["Devis", "Info Produit", "RDV"]),
-                    "État": "À traiter"
-                })
+    # --- THEME 1 ---
+    if "Dossier 1" in dossier_name: # Demandes
+        for i in range(5):
+            rows.append({
+                "Contact": f"Client {random.randint(100,999)}",
+                "Canal": random.choice(["Mail", "Téléphone", "Accueil"]),
+                "Objet": random.choice(["Info Tarif", "Disponibilité", "Horaires"]),
+                "Statut": "À traiter"
+            })
+    elif "Dossier 2" in dossier_name: # Opérations
+        for i in range(5):
+            rows.append({
+                "Dossier": f"D-{random.randint(1000,9999)}",
+                "Client": random.choice(NOMS),
+                "Type": "Prestation Service",
+                "Étape": random.choice(["Devis signé", "En cours", "Terminé"]),
+                "Action": "Informer client"
+            })
+    elif "Dossier 3" in dossier_name: # Réclamations
+        for i in range(4):
+            rows.append({
+                "N° Litige": f"LIT-{random.randint(10,99)}",
+                "Client": random.choice(NOMS),
+                "Motif": random.choice(["Erreur facturation", "Retard", "Produit abîmé"]),
+                "Demande": "Remboursement",
+                "Priorité": "Haute"
+            })
+    elif "Dossier 4" in dossier_name: # Satisfaction
+        for i in range(5):
+            rows.append({
+                "Critère": random.choice(["Accueil", "Qualité", "Délai", "Prix"]),
+                "Note": f"{random.randint(1,5)}/5",
+                "Verbatim": random.choice(["Très bien", "Déçu", "Correct", "Excellent"])
+            })
 
-    # THEME 2 : ORGANISATION PRODUCTION
-    elif "ORGANISATION" in theme:
-        if "approvisionnements" in dossier:
-            # Stocks et Fournisseurs
-            for _ in range(6):
-                rows.append({
-                    "Réf": f"ART-{random.randint(100,999)}",
-                    "Désignation": random.choice(["Papier", "Encre", "Classeurs", "PC"]),
-                    "Stock Réel": random.randint(0, 20),
-                    "Stock Alerte": 5,
-                    "Fournisseur": random.choice(["BureauVallée", "OfficeDepot", "Grossiste"])
-                })
-        elif "règlements" in dossier:
-            # Impayés
-            for _ in range(5):
-                rows.append({
-                    "Facture": f"F-{2024000+random.randint(1,99)}",
-                    "Client": random.choice(NOMS),
-                    "Montant": f"{random.randint(100, 3000)} €",
-                    "Échéance": "15/10/2024 (Dépassée)",
-                    "Relance": "À faire"
-                })
-        else: # Commandes / Facturation
-            for i in range(1, 7):
-                rows.append({
-                    "Commande": f"BC-{100+i}",
-                    "Client": random.choice(NOMS),
-                    "Montant HT": random.randint(500, 5000),
-                    "Statut": random.choice(["À livrer", "Livré non facturé", "Facturé"])
-                })
+    # --- THEME 2 ---
+    elif "Dossier 5" in dossier_name: # Appro
+        produits = ["Papier A4", "Cartouches", "Stylos", "Classeurs"]
+        for p in produits:
+            rows.append({
+                "Réf": f"REF-{random.randint(100,999)}",
+                "Article": p,
+                "Stock Physique": random.randint(0, 20),
+                "Stock Minimum": 10,
+                "Fournisseur": "OfficePro"
+            })
+    elif "Dossier 6" in dossier_name: # Commandes
+        for i in range(5):
+            rows.append({
+                "BC N°": f"C-{2024000+i}",
+                "Client": random.choice(NOMS),
+                "Date": "26/11/2024",
+                "Montant": f"{random.randint(100, 1000)} €",
+                "Statut": "À valider"
+            })
+    elif "Dossier 7" in dossier_name: # Facturation
+        for i in range(5):
+            rows.append({
+                "BL N°": f"BL-{100+i}",
+                "Client": random.choice(NOMS),
+                "Marchandise": "Livrée conforme",
+                "Facture": "À émettre",
+                "TVA": "20%"
+            })
+    elif "Dossier 8" in dossier_name: # Règlements
+        for i in range(5):
+            rows.append({
+                "Facture": f"F-{500+i}",
+                "Client": random.choice(NOMS),
+                "Échéance": "15/10/2024 (Dépassée)",
+                "Reste dû": f"{random.randint(50, 500)} €",
+                "Relance": "Niveau 1 à faire"
+            })
 
-    # THEME 3 : RH
-    elif "ADMINISTRATION" in theme:
-        if "carrière" in dossier:
-            # Candidats
-            for _ in range(5):
-                rows.append({
-                    "Candidat": f"{random.choice(NOMS)} {random.choice(['A.', 'M.', 'L.'])}",
-                    "Diplôme": random.choice(["Bac Pro", "BTS", "Autodidacte"]),
-                    "Expérience": f"{random.randint(0, 10)} ans",
-                    "Avis": "À étudier"
-                })
-        elif "activité" in dossier:
-            # Congés
-            for _ in range(6):
-                rows.append({
-                    "Salarié": random.choice(NOMS),
-                    "Type": random.choice(["CP", "RTT", "Maladie"]),
-                    "Dates": "Du 10/12 au 15/12",
-                    "Solde CP": f"{random.randint(0, 25)} jours"
-                })
-        else: # Social
-            rows.append({"Evénement": "Arbre de Noël", "Budget": "2000 €", "Statut": "Prestataire à trouver"})
+    # --- THEME 3 ---
+    elif "Dossier 9" in dossier_name: # Carrière
+        postes = ["Assistant", "Comptable", "Technicien"]
+        for _ in range(5):
+            rows.append({
+                "Candidat": f"{random.choice(NOMS)}",
+                "Poste Visé": random.choice(postes),
+                "Diplôme": "Bac Pro",
+                "Expérience": f"{random.randint(0,5)} ans",
+                "Statut": "À trier"
+            })
+    elif "Dossier 10" in dossier_name: # Activité
+        for _ in range(6):
+            rows.append({
+                "Salarié": random.choice(NOMS),
+                "Demande": random.choice(["CP", "RTT", "Récup"]),
+                "Dates": "Décembre",
+                "Solde Dispo": f"{random.randint(0, 30)} jours",
+                "Validation": "En attente"
+            })
+    elif "Dossier 11" in dossier_name: # Social
+        rows.append({"Projet": "Arbre de Noël", "Budget": "1500 €", "État": "Prestataire à chercher"})
+        rows.append({"Projet": "Journal Interne", "Budget": "200 €", "État": "Articles à rédiger"})
 
     else:
-        rows.append({"Info": "Données génériques"})
+        rows.append({"Info": "Pas de données spécifiques"})
 
     return pd.DataFrame(rows)
 
 # --- 10. IA (PROMPT) ---
 SYSTEM_PROMPT = """
-RÔLE : Tu es Tuteur et Évaluateur pour le Bac Pro AGOrA.
+RÔLE : Tu es le Tuteur de stage et Evaluateur CCF (Bac Pro AGOrA).
 TON : Professionnel, directif.
 
-OBJECTIF : Faire réaliser une TÂCHE ADMINISTRATIVE à l'élève en s'appuyant sur les DOCUMENTS fournis (le PGI).
+OBJECTIF : Faire réaliser une TÂCHE ADMINISTRATIVE liée au DOSSIER choisi.
 
-RÈGLES ABSOLUES :
-1. NE DONNE PAS LA RÉPONSE. Si l'élève demande "C'est qui le candidat ?", dis-lui : "Consultez le tableau des candidats ci-dessus et comparez avec les critères."
-2. VALIDATION PAR PREUVE : Si l'élève propose une action, vérifie si elle correspond aux données du PGI. (Ex: S'il veut commander l'imprimante alors qu'elle est en rupture, dis non).
-3. PRODUCTION ÉCRITE : Une fois l'analyse faite, demande systématiquement une production (Mail, Note, Courrier) en précisant les mentions obligatoires attendues.
+CONSIGNE À L'IA :
+1. IDENTIFIE la tâche du dossier (ex: Dossier 7 = Facturation -> Demande de faire la facture).
+2. UTILISE LE PGI : Les données sont ci-dessous. Interroge l'élève dessus.
+3. NE DONNE PAS LA RÉPONSE.
+4. DEMANDE UNE PRODUCTION (Mail, Tableau, Courrier).
 
-SÉCURITÉ : Pas de données réelles.
+SÉCURITÉ : Données réelles -> STOP.
 """
 
 INITIAL_MESSAGE = """
 👋 **Bonjour.**
 
-Bienvenue dans le module d'entraînement **Pro'AGOrA**.
-Ici, nous travaillons sur des cas concrets type examen.
-
-Veuillez choisir votre **Mission** dans le menu de gauche.
+Bienvenue dans le module **Pro'AGOrA** (Conforme Référentiel Foucher).
+Veuillez choisir votre **Dossier** dans le menu de gauche.
 """
 
 if not st.session_state.messages:
     st.session_state.messages.append({"role": "assistant", "content": INITIAL_MESSAGE})
 
 def lancer_mission(prenom):
-    theme = st.session_state.theme
-    dossier = st.session_state.dossier
-    
-    # 1. Tirage contexte aléatoire
     lieu = random.choice(TYPES_ORGANISATIONS)
     ville = random.choice(VILLES_FRANCE)
-
-    # 2. Chargement données dossier
-    data = DB_PREMIERE[theme][dossier]
-    competence = data["competence"]
-    procedure = data.get("procedure", "Standard")
     
-    # 3. Génération PGI
-    st.session_state.pgi_data = get_pgi_data(theme, dossier)
+    theme = st.session_state.theme
+    dossier = st.session_state.dossier
+    competence = DB_OFFICIELLE[theme][dossier]
+    
+    st.session_state.pgi_data = generate_fake_pgi_data(dossier)
     st.session_state.messages = []
-    st.session_state.current_context_doc = data.get("doc", None)
-
-    prompt_init = f"""
-    DÉMARRAGE EXERCICE.
-    ÉLÈVE : {prenom}
-    CONTEXTE : {lieu} à {ville}.
-    MISSION : {dossier}
-    PROCÉDURE : {procedure}
     
-    CONSIGNE :
-    1. Accueille l'élève en présentant l'entreprise.
-    2. Donne la 1ère tâche liée au PGI affiché (ex: "Analyse le tableau et dis-moi...").
+    pgi_txt = st.session_state.pgi_data.to_string() if st.session_state.pgi_data is not None else "Aucune donnée."
+
+    prompt = f"""
+    DÉMARRAGE.
+    STAGIAIRE : {prenom}.
+    CONTEXTE : {lieu} à {ville}.
+    DOSSIER : {dossier}.
+    COMPÉTENCE : {competence}.
+    
+    DONNÉES PGI :
+    {pgi_txt}
+    
+    ACTION :
+    1. Accueille l'élève.
+    2. Présente le contexte.
+    3. Donne la 1ère consigne liée à ce dossier précis.
     """
     
-    msgs = [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt_init}]
-    with st.spinner("Préparation du dossier..."):
+    msgs = [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}]
+    with st.spinner("Chargement du dossier..."):
         resp, _ = query_groq_with_rotation(msgs)
         st.session_state.messages.append({"role": "assistant", "content": resp})
-    add_notification(f"Mission lancée : {dossier}")
+    add_notification(f"Dossier lancé : {dossier}")
 
-def generer_bilan_ccf():
-    """Génère un bilan type fiche E31/E32"""
-    history = [m["content"] for m in st.session_state.messages if m["role"] == "user"]
-    full_text = "\n".join(history) 
+def generer_bilan_ccf(student_name, dossier):
+    """Génère le bilan officiel pour le professeur"""
+    history = [m["content"] for m in st.session_state.messages]
+    full_text = "\n".join(history)
     
     prompt_bilan = f"""
-    Agis comme un Professeur correcteur. Analyse le travail de l'élève :
+    AGIS COMME UN INSPECTEUR DE L'ÉDUCATION NATIONALE.
+    
+    Élève : {student_name}
+    Mission : {dossier}
+    
+    ANALYSE CETTE SESSION D'EXAMEN CCF (Bac Pro AGORA) :
     {full_text}
     
-    Remplis la fiche d'appréciation (à la 3ème personne : "L'élève...") :
-    1. **Compréhension du problème** : (A-t-il bien identifié l'info dans le PGI ?)
-    2. **Qualité de la production écrite** : (Respect des formes, orthographe).
-    3. **Compétence globale** : (Acquise / En cours / Non acquise).
+    RÉDIGE LE BILAN FINAL (FICHE D'ÉVALUATION) À L'ATTENTION DU JURY :
+    
+    1. 🏢 CONTEXTE PROFESSIONNEL
+       - Structure : [Citer le lieu/ville]
+       - Mission : [Citer la mission]
+       
+    2. ✅ ACTIVITÉS RÉALISÉES PAR LE CANDIDAT
+       - [Lister les tâches effectuées factuellement]
+       
+    3. 📊 ÉVALUATION DES COMPÉTENCES (Utiliser : NOVICE / FONCTIONNEL / MAÎTRISE)
+       - Communication écrite : [Niveau] + [Justification]
+       - Usage des outils numériques (PGI) : [Niveau] + [Justification]
+       - Respect des procédures : [Niveau] + [Justification]
+       
+    4. 📝 APPRÉCIATION GLOBALE
+       - [Rédiger 2 phrases de synthèse sur la prestation du candidat à la 3ème personne ("L'élève a...", "Le candidat démontre...")]
     """
-    msgs = [{"role": "system", "content": "Evaluateur strict."}, {"role": "user", "content": prompt_bilan}]
+    
+    msgs = [{"role": "system", "content": "Tu es un Inspecteur IEN neutre et bienveillant."}, {"role": "user", "content": prompt_bilan}]
     return query_groq_with_rotation(msgs)[0]
 
 # --- 11. INTERFACE GRAPHIQUE ---
@@ -431,22 +418,16 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # GAMIFICATION
+    # XP
     st.markdown(f"### 🏆 {st.session_state.grade}")
     st.progress(min(st.session_state.xp / 1000, 1.0))
     st.caption(f"XP : {st.session_state.xp}")
     
     student_name = st.text_input("Prénom", placeholder="Ex: Camille")
     
-    st.subheader("📂 Dossiers Professionnels")
-    
-    # Sélection Thème
-    theme_keys = list(DB_PREMIERE.keys())
-    st.session_state.theme = st.selectbox("Thème", theme_keys)
-    
-    # Sélection Dossier (dynamique)
-    dossier_keys = list(DB_PREMIERE[st.session_state.theme].keys())
-    st.session_state.dossier = st.selectbox("Mission", dossier_keys)
+    st.subheader("📂 Dossiers (Manuel Foucher)")
+    st.session_state.theme = st.selectbox("Thème", list(DB_OFFICIELLE.keys()))
+    st.session_state.dossier = st.selectbox("Dossier", list(DB_OFFICIELLE[st.session_state.theme].keys()))
     
     if st.button("LANCER", type="primary"):
         if student_name:
@@ -465,7 +446,7 @@ with st.sidebar:
     if uploaded_file and student_name:
         if st.button("Envoyer"):
             txt = extract_text_from_docx(uploaded_file)
-            st.session_state.messages.append({"role": "user", "content": f"PROPOSITION ÉLÈVE : {txt}"})
+            st.session_state.messages.append({"role": "user", "content": f"PROPOSITION : {txt}"})
             update_xp(20)
             st.rerun()
             
@@ -473,22 +454,35 @@ with st.sidebar:
     st.markdown("---")
     if st.button("📝 Générer Bilan CCF"):
         if len(st.session_state.messages) > 2:
-            bilan = generer_bilan_ccf()
-            st.session_state.messages.append({"role": "assistant", "content": f"**FICHE D'ÉVALUATION :**\n\n{bilan}"})
+            with st.spinner("Rédaction du Bilan Officiel..."):
+                bilan = generer_bilan_ccf(student_name, st.session_state.dossier)
+                st.session_state.bilan_ready = bilan
             st.rerun()
+        else:
+            st.warning("Travaillez d'abord !")
+            
+    if st.session_state.bilan_ready:
+        st.download_button(
+            label="📥 Télécharger Fiche Bilan",
+            data=st.session_state.bilan_ready,
+            file_name=f"Bilan_CCF_{student_name}.txt",
+            mime="text/plain"
+        )
 
-    # SAUVEGARDE (Toujours visible)
+    # SAUVEGARDE
     csv_data = ""
+    btn_state = True
     if len(st.session_state.messages) > 0:
         chat_df = pd.DataFrame(st.session_state.messages)
         csv_data = chat_df.to_csv(index=False).encode('utf-8')
-    
-    st.download_button("💾 Sauvegarder", csv_data, "agora_save.csv", "text/csv", disabled=(len(csv_data)==0))
+        btn_state = False
+        
+    st.download_button("💾 Sauvegarder", csv_data, "agora_save.csv", "text/csv", disabled=btn_state)
     
     if st.button("🗑️ Reset"):
         st.session_state.messages = [{"role": "assistant", "content": INITIAL_MESSAGE}]
         st.session_state.pgi_data = None
-        st.session_state.current_context_doc = None
+        st.session_state.bilan_ready = None
         st.rerun()
 
 # --- HEADER ---
@@ -498,7 +492,7 @@ with c1:
     if os.path.exists(LOGO_AGORA):
         b64 = img_to_base64(LOGO_AGORA)
         logo_html = f'<img src="data:image/png;base64,{b64}" style="height:40px; margin-right:10px;">'
-    st.markdown(f"""<div style="display:flex; align-items:center;">{logo_html}<div><div style="font-size:22px; font-weight:bold; color:#202124;">Agence Pro'AGOrA</div><div style="font-size:12px; color:#5F6368;">v4.1 (Conforme Livre)</div></div></div>""", unsafe_allow_html=True)
+    st.markdown(f"""<div style="display:flex; align-items:center;">{logo_html}<div><div style="font-size:22px; font-weight:bold; color:#202124;">Agence Pro'AGOrA</div><div style="font-size:12px; color:#5F6368;">Conforme Référentiel</div></div></div>""", unsafe_allow_html=True)
 
 with c2:
     with st.popover("ℹ️ Aide Métier"):
@@ -506,13 +500,17 @@ with c2:
         st.link_button("Fiches Métiers", "https://www.onisep.fr")
 
 with c3:
+    with st.popover("❓ Aide Outil"):
+        st.link_button("Accès ENT", "https://cas.ent.auvergnerhonealpes.fr/login?service=https%3A%2F%2Fglieres.ent.auvergnerhonealpes.fr%2Fsg.do%3FPROC%3DPAGE_ACCUEIL")
+
+with c4:
     st.button(f"👤 {student_name if student_name else 'Invité'}", disabled=True)
 
 st.markdown("<hr style='margin: 0 0 20px 0;'>", unsafe_allow_html=True)
 
 # --- AFFICHAGE PGI (PREUVES) ---
 if st.session_state.pgi_data is not None:
-    st.markdown(f'<div class="pgi-title">📁 DOCUMENTS DE L\'ENTREPRISE ({st.session_state.dossier})</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="pgi-title">📁 DOCUMENTS ({st.session_state.dossier})</div>', unsafe_allow_html=True)
     with st.container():
         st.markdown('<div class="pgi-container">', unsafe_allow_html=True)
         st.dataframe(st.session_state.pgi_data, use_container_width=True, hide_index=True)
@@ -555,15 +553,14 @@ if st.session_state.messages[-1]["role"] == "user":
             
             # On donne l'historique récent + le PGI à l'IA
             prompt_tour = f"""
-            DONNÉES DU PGI ACTUEL (PREUVE) :
-            {pgi_str}
+            DONNÉES PGI (PREUVE) : {pgi_str}
+            RÉPONSE ÉLÈVE : "{user_input}"
+            MISSION : {st.session_state.dossier}
             
-            DERNIÈRE RÉPONSE ÉLÈVE : "{user_input}"
-            
-            TA MISSION :
-            1. Vérifie si l'élève a utilisé les bonnes infos du PGI ci-dessus.
-            2. Si oui, valide et demande la production suivante (Mail, Document).
-            3. Si non, dis-lui "Regarde bien le tableau...".
+            CONSIGNE :
+            1. Vérifie si l'élève utilise bien le PGI.
+            2. Si oui, valide et demande la production suivante.
+            3. Si non, corrige-le.
             """
             
             msgs = [{"role": "system", "content": sys}, {"role": "user", "content": prompt_tour}]
