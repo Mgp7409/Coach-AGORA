@@ -178,7 +178,9 @@ def query_groq_with_rotation(messages):
 
     keys = list(available_keys)
     random.shuffle(keys)
-    models = ["llama-3.3-70b-versatile", "mixtral-8x7b-32768"]
+    
+    # --- MODIFICATION ICI : On met le modèle léger en premier ---
+    models = ["llama3-8b-8192", "mixtral-8x7b-32768", "llama-3.3-70b-versatile"]
 
     for key in keys:
         try:
@@ -193,7 +195,7 @@ def query_groq_with_rotation(messages):
                     )
                     return chat.choices[0].message.content, model
                 except Exception as e:
-                    # st.error(f"Erreur modèle {model} : {e}") # Debug only
+                    # On passe au modèle suivant silencieusement
                     continue
         except Exception as e:
             st.error(f"Erreur connexion Groq : {e}")
