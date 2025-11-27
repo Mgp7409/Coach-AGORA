@@ -22,6 +22,7 @@ except ImportError:
     HAS_AUDIO = False
 
 # --- 1. CONFIGURATION DE LA PAGE ---
+# Recherche du logo local, sinon icône par défaut
 PAGE_ICON = "logo_agora.png" if os.path.exists("logo_agora.png") else "🏢"
 
 st.set_page_config(
@@ -31,7 +32,7 @@ st.set_page_config(
     initial_sidebar_state="auto"
 )
 
-# --- 2. GESTION ÉTAT ---
+# --- 2. GESTION ÉTAT (SESSION STATE) ---
 if "messages" not in st.session_state: st.session_state.messages = []
 if "notifications" not in st.session_state: st.session_state.notifications = ["Système prêt."]
 if "current_context_doc" not in st.session_state: st.session_state.current_context_doc = None
@@ -64,10 +65,11 @@ def update_xp(amount):
     else:
         st.toast(f"+{amount} XP", icon="⭐")
 
-# --- 3. VARIABLES DE CONTEXTE ---
+# --- 3. VARIABLES DE CONTEXTE (Aléatoire) ---
 VILLES_FRANCE = ["Lyon", "Bordeaux", "Lille", "Nantes", "Strasbourg", "Toulouse", "Marseille", "Nice", "Rennes", "Dijon"]
 TYPES_ORGANISATIONS = ["Mairie", "Clinique", "Garage", "Association", "PME BTP", "Agence Immo", "Supermarché", "Cabinet Comptable"]
 NOMS = ["Martin", "Bernard", "Thomas", "Petit", "Robert", "Richard", "Durand", "Dubois", "Moreau", "Laurent"]
+PRENOMS = ["Emma", "Gabriel", "Léo", "Louise", "Raphaël", "Jade", "Louis", "Ambre", "Lucas", "Arthur"]
 
 # --- 4. OUTILS IMAGE ---
 def img_to_base64(img_path):
@@ -181,7 +183,7 @@ def add_notification(msg):
     ts = datetime.now().strftime("%H:%M")
     st.session_state.notifications.insert(0, f"{ts} - {msg}")
 
-# --- 8. BASE DE DONNÉES CONFORME FOUCHER ---
+# --- 8. SOMMAIRE OFFICIEL FOUCHER ---
 DB_OFFICIELLE = {
     "1. RELATIONS CLIENTS & USAGERS": {
         "Dossier 1 : Traiter les demandes": "Qualifier la demande, orienter, répondre (mail/tel).",
@@ -202,11 +204,11 @@ DB_OFFICIELLE = {
     }
 }
 
-# --- 9. GÉNÉRATEUR PGI ALIGNÉ ---
+# --- 9. GÉNÉRATEUR PGI INTELLIGENT (Par Dossier) ---
 def generate_fake_pgi_data(dossier_name):
     rows = []
     
-    # --- THEME 1 ---
+    # --- THEME 1 : RELATIONS CLIENTS ---
     if "Dossier 1" in dossier_name: # Demandes
         for i in range(5):
             rows.append({
@@ -241,7 +243,7 @@ def generate_fake_pgi_data(dossier_name):
                 "Verbatim": random.choice(["Très bien", "Déçu", "Correct", "Excellent"])
             })
 
-    # --- THEME 2 ---
+    # --- THEME 2 : ORGANISATION ---
     elif "Dossier 5" in dossier_name: # Appro
         produits = ["Papier A4", "Cartouches", "Stylos", "Classeurs"]
         for p in produits:
@@ -280,7 +282,7 @@ def generate_fake_pgi_data(dossier_name):
                 "Relance": "Niveau 1 à faire"
             })
 
-    # --- THEME 3 ---
+    # --- THEME 3 : RH ---
     elif "Dossier 9" in dossier_name: # Carrière
         postes = ["Assistant", "Comptable", "Technicien"]
         for _ in range(5):
@@ -309,7 +311,7 @@ def generate_fake_pgi_data(dossier_name):
 
     return pd.DataFrame(rows)
 
-# --- 10. IA (PROMPT) ---
+# --- 10. IA (PROMPT "EVALUATEUR CCF") ---
 SYSTEM_PROMPT = """
 RÔLE : Tu es le Tuteur de stage et Evaluateur CCF (Bac Pro AGOrA).
 TON : Professionnel, directif.
@@ -486,13 +488,13 @@ with st.sidebar:
         st.rerun()
 
 # --- HEADER ---
-c1, c2, c3 = st.columns([3, 1, 1])
+c1, c2, c3, c4, c5 = st.columns([3, 1, 1, 1, 1])
 with c1:
     logo_html = ""
     if os.path.exists(LOGO_AGORA):
         b64 = img_to_base64(LOGO_AGORA)
         logo_html = f'<img src="data:image/png;base64,{b64}" style="height:40px; margin-right:10px;">'
-    st.markdown(f"""<div style="display:flex; align-items:center;">{logo_html}<div><div style="font-size:22px; font-weight:bold; color:#202124;">Agence Pro'AGOrA</div><div style="font-size:12px; color:#5F6368;">Conforme Référentiel</div></div></div>""", unsafe_allow_html=True)
+    st.markdown(f"""<div style="display:flex; align-items:center;">{logo_html}<div><div style="font-size:22px; font-weight:bold; color:#202124;">Agence Pro'AGOrA</div><div style="font-size:12px; color:#5F6368;">Conforme Foucher</div></div></div>""", unsafe_allow_html=True)
 
 with c2:
     with st.popover("ℹ️ Aide Métier"):
@@ -504,7 +506,8 @@ with c3:
         st.link_button("Accès ENT", "https://cas.ent.auvergnerhonealpes.fr/login?service=https%3A%2F%2Fglieres.ent.auvergnerhonealpes.fr%2Fsg.do%3FPROC%3DPAGE_ACCUEIL")
 
 with c4:
-    st.button(f"👤 {student_name if student_name else 'Invité'}", disabled=True)
+    user_label = f"👤 {student_name}" if student_name else "👤 Invité"
+    st.button(user_label, disabled=True, use_container_width=True)
 
 st.markdown("<hr style='margin: 0 0 20px 0;'>", unsafe_allow_html=True)
 
