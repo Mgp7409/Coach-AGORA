@@ -57,7 +57,7 @@ GRADES = {
     1000: "👑 Directeur(trice)"
 }
 
-def update_xp(amount):
+def update_xp(amount: int):
     st.session_state.xp += amount
     current_grade = "👶 Stagiaire"
     for palier, titre in GRADES.items():
@@ -72,13 +72,36 @@ def update_xp(amount):
         st.toast(f"+{amount} XP", icon="⭐")
 
 # --- 3. VARIABLES DE CONTEXTE (Aléatoire) ---
-VILLES_FRANCE = ["Lyon", "Bordeaux", "Lille", "Nantes", "Strasbourg", "Toulouse", "Marseille", "Nice", "Rennes", "Dijon"]
-TYPES_ORGANISATIONS = ["Mairie", "Clinique", "Garage", "Association", "PME BTP", "Agence Immo", "Supermarché", "Cabinet Comptable"]
-NOMS = ["Martin", "Bernard", "Thomas", "Petit", "Robert", "Richard", "Durand", "Dubois", "Moreau", "Laurent"]
-PRENOMS = ["Emma", "Gabriel", "Léo", "Louise", "Raphaël", "Jade", "Louis", "Ambre", "Lucas", "Arthur"]
+
+VILLES_FRANCE = [
+    "Lyon", "Bordeaux", "Lille", "Nantes", "Strasbourg",
+    "Toulouse", "Marseille", "Nice", "Rennes", "Dijon",
+    "Grenoble", "Clermont-Ferrand", "Tours", "Metz", "Rouen"
+]
+
+TYPES_ORGANISATIONS = [
+    "Mairie", "Clinique", "Garage", "Association",
+    "PME BTP", "Agence immobilière", "Supermarché",
+    "Cabinet comptable", "Start-up numérique", "Centre culturel"
+]
+
+# Noms / prénoms plus variés, peu de doublons
+NOMS = [
+    "Martin", "Bernard", "Thomas", "Lopez", "Nguyen",
+    "Diallo", "Moreau", "Khan", "Rodriguez", "Schneider",
+    "Diop", "Rossi", "Dubois", "Garcia", "Haddad",
+    "Kouyaté", "Kim", "Fernandes", "Popov", "Oumar"
+]
+
+PRENOMS = [
+    "Emma", "Gabriel", "Lina", "Yanis", "Aïcha",
+    "Noah", "Sara", "Hugo", "Maya", "Ethan",
+    "Inès", "Amir", "Chloé", "Diego", "Léa",
+    "Naomi", "Omar", "Sofia", "Jules", "Fatou"
+]
 
 # --- 4. OUTILS IMAGE ---
-def img_to_base64(img_path):
+def img_to_base64(img_path: str) -> str:
     if os.path.exists(img_path):
         with open(img_path, "rb") as f:
             return base64.b64encode(f.read()).decode()
@@ -89,7 +112,8 @@ is_dys = st.session_state.get("mode_dys", False)
 font_family = "'Verdana', sans-serif" if is_dys else "'Segoe UI', 'Roboto', Helvetica, Arial, sans-serif"
 font_size = "18px" if is_dys else "16px"
 
-st.markdown(f"""
+st.markdown(
+    f"""
 <style>
     html, body, [class*="css"] {{
         font-family: {font_family} !important;
@@ -98,10 +122,14 @@ st.markdown(f"""
         background-color: #FFFFFF;
     }}
     header {{background-color: transparent !important;}}
-    [data-testid="stHeader"] {{background-color: rgba(255, 255, 255, 0.95);}}
-    .reportview-container .main .block-container {{padding-top: 1rem; max-width: 100%;}}
+    [data-testid="stHeader"] {{
+        background-color: rgba(255, 255, 255, 0.95);
+    }}
+    .reportview-container .main .block-container {{
+        padding-top: 1rem;
+        max-width: 100%;
+    }}
 
-    /* PGI STYLE */
     .pgi-container {{
         border: 1px solid #dfe1e5;
         border-radius: 8px;
@@ -119,31 +147,53 @@ st.markdown(f"""
         gap: 10px;
     }}
 
-    /* BOUTONS */
     button[kind="primary"] {{
         background: linear-gradient(135deg, #0F9D58 0%, #00C9FF 100%);
         color: white !important;
         border: none;
     }}
 
-    /* CHAT (style générique, sans cibler les rôles) */
     [data-testid="stChatMessage"] {{
         padding: 1rem;
         border-radius: 12px;
         margin-bottom: 0.5rem;
     }}
+    [data-testid="stChatMessage"][data-testid="assistant"] {{
+        background-color: #FFFFFF;
+        border: 1px solid #E0E0E0;
+    }}
+    [data-testid="stChatMessage"][data-testid="user"] {{
+        background-color: #E3F2FD;
+        border: none;
+    }}
+    [data-testid="stChatMessageAvatar"] img {{
+        border-radius: 50%;
+        object-fit: cover;
+    }}
 
     .fixed-footer {{
         position: fixed;
-        left: 0; bottom: 0; width: 100%;
-        background: #323232; color: #FFF;
-        text-align: center; padding: 6px; font-size: 11px; z-index: 99999;
+        left: 0;
+        bottom: 0;
+        width: 100%;
+        background: #323232;
+        color: #FFF;
+        text-align: center;
+        padding: 6px;
+        font-size: 11px;
+        z-index: 99999;
     }}
-    [data-testid="stBottom"] {{ bottom: 30px !important; padding-bottom: 10px; }}
+    [data-testid="stBottom"] {{
+        bottom: 30px !important;
+        padding-bottom: 10px;
+    }}
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
-# --- 6. LOGIQUE API ---
+# --- 6. LOGIQUE API GROQ ---
+
 def get_api_keys_list():
     if "groq_keys" in st.secrets:
         return st.secrets["groq_keys"]
@@ -151,23 +201,26 @@ def get_api_keys_list():
         return [st.secrets["GROQ_API_KEY"]]
     return []
 
+
 def query_groq_with_rotation(messages):
-    """
-    Retourne (texte, modele) ou (None, 'ERREUR CONFIG' / 'SATURATION')
-    """
     available_keys = get_api_keys_list()
     if not available_keys:
         return None, "ERREUR CONFIG"
+
     keys = list(available_keys)
     random.shuffle(keys)
     models = ["llama-3.3-70b-versatile", "mixtral-8x7b-32768"]
+
     for key in keys:
         try:
             client = Groq(api_key=key)
             for model in models:
                 try:
                     chat = client.chat.completions.create(
-                        messages=messages, model=model, temperature=0.3, max_tokens=1024
+                        messages=messages,
+                        model=model,
+                        temperature=0.3,
+                        max_tokens=1024,
                     )
                     return chat.choices[0].message.content, model
                 except Exception:
@@ -176,403 +229,326 @@ def query_groq_with_rotation(messages):
             continue
     return None, "SATURATION"
 
-# --- 7. OUTILS ---
-def extract_text_from_docx(file):
+# --- 7. OUTILS FICHIERS ---
+
+def extract_text_from_docx(file) -> str:
     try:
         doc = Document(file)
         text = "\n".join([p.text for p in doc.paragraphs if p.text.strip()])
         return text[:8000]
     except Exception as e:
-        return str(e)
+        return f"ERREUR LECTURE DOCX : {e}"
 
-def clean_text_for_audio(text):
-    text = re.sub(r'[\*_]{1,3}', '', text)
-    text = re.sub(r'\[.*?\]', '', text)
-    text = re.sub(r'📎.*', '', text)
+
+def extract_text_from_table_file(file) -> str:
+    """
+    Lit un fichier Excel ou CSV rendu par l'élève (tableaux, calculs, etc.)
+    et renvoie une version texte exploitable par l'IA.
+    """
+    try:
+        filename = getattr(file, "name", "").lower()
+        if filename.endswith(".csv"):
+            df = pd.read_csv(file)
+        else:
+            # xls / xlsx
+            df = pd.read_excel(file)
+
+        text = df.to_string(index=False)
+        return text[:8000]
+    except Exception as e:
+        return f"ERREUR LECTURE TABLEUR : {e}"
+
+
+def clean_text_for_audio(text: str) -> str:
+    text = re.sub(r"[\*_]{1,3}", "", text)
+    text = re.sub(r"\[.*?\]", "", text)
+    text = re.sub(r"📎.*", "", text)
     return text
 
-def add_notification(msg):
+
+def add_notification(msg: str):
     ts = datetime.now().strftime("%H:%M")
     st.session_state.notifications.insert(0, f"{ts} - {msg}")
 
-# --- 8. SOMMAIRE (STRUCTURE DES DOSSIERS) ---
+# --- 8. SOMMAIRE OFFICIEL (aligné sur Foucher) ---
 
+# Structure en 3 grandes parties comme dans le sommaire du manuel. 
 DB_OFFICIELLE = {
-    "1. La gestion opérationnelle des espaces de travail": {
-        "1 Organiser le fonctionnement des espaces de travail":
-            "Proposer un environnement de travail adapté et sélectionner les équipements nécessaires.",
-        "2 Organiser l'environnement numérique d'un service":
-            "Proposer un environnement numérique adapté, recenser les contraintes réglementaires et planifier la mise en œuvre de l'environnement numérique du service.",
-        "3 Gérer les ressources partagées de l'organisation":
-            "Mettre en place une nouvelle gestion du partage des ressources et proposer l'utilisation de nouveaux outils de partage.",
-        "4 Organiser le partage de l'information":
-            "Analyser la communication interne et définir une nouvelle stratégie de communication avec un outil collaboratif."
+    "La gestion opérationnelle des espaces de travail": {
+        "Dossier 1 – Organiser le fonctionnement des espaces de travail":
+            "Modes de travail (télétravail, coworking…), aménagement open space, matériel et PGI.",
+        "Dossier 2 – Organiser l’environnement numérique d’un service":
+            "Réseaux (internet/intranet/extranet), ENT, cloud, RGPD, plan de déploiement du service comptable.",
+        "Dossier 3 – Gérer les ressources partagées de l’organisation":
+            "Gestion des fournitures, salles, véhicules, stocks et outils de réservation.",
+        "Dossier 4 – Organiser le partage de l’information":
+            "Diagnostic de la communication interne, nouvelle stratégie, paramétrage d’un outil collaboratif."
     },
-    "2. Le traitement de formalités administratives liées aux relations avec les partenaires": {
-        "5 Participer au lancement d'une nouvelle gamme":
-            "Préparer le planigramme des tâches du lancement et assurer la communication avec les partenaires.",
-        "6 Organiser et suivre des réunions":
-            "Organiser une réunion de service et assurer le suivi administratif (compte rendu, relevé de décisions).",
-        "7 Organiser un déplacement":
-            "Préparer les modalités d'un déplacement professionnel et les formalités administratives associées."
+    "Le traitement de formalités administratives liées aux relations avec les partenaires": {
+        "Dossier 5 – Participer au lancement d’une nouvelle gamme":
+            "Planigramme du lancement, négociation fournisseur, communication multicanale.",
+        "Dossier 6 – Organiser et suivre des réunions":
+            "Réunion de service présentielle, visioconférence, convocations et comptes rendus.",
+        "Dossier 7 – Organiser un déplacement":
+            "Organisation pratique du déplacement et formalités administratives associées."
     },
-    "3. Le suivi administratif des relations avec le personnel": {
-        "8 Participer au recrutement du personnel":
-            "Préparer le recrutement et participer à la sélection de la ou du candidat(e).",
-        "9 Participer à l'intégration du personnel":
-            "Préparer l'accueil du(de la) nouvel(le) salarié(e) et contribuer à sa bonne intégration.",
-        "10 Actualiser les dossiers du personnel":
-            "Mettre à jour les dossiers du personnel (contrats, avenants, éléments administratifs)."
+    "Le suivi administratif des relations avec le personnel": {
+        "Dossier 8 – Participer au recrutement du personnel":
+            "Préparation du recrutement, tri des candidatures, sélection.",
+        "Dossier 9 – Participer à l’intégration du personnel":
+            "Accueil du nouveau salarié, parcours d’intégration, motivation et cohésion.",
+        "Dossier 10 – Actualiser les dossiers du personnel":
+            "Contrats, avenants, registre du personnel, complétude des dossiers."
     }
 }
 
-# --- 8 bis. FICHES D'AIDE PAR DOSSIER ---
-
+# Fiches d’aide par dossier, construites à partir des situations professionnelles du manuel. 
 AIDES_DOSSIERS = {
-    "1 Organiser le fonctionnement des espaces de travail": """
-🎯 Objectif de la tâche
-- Vérifier si les espaces de travail sont adaptés à l’activité.
-- Identifier les manques ou les dysfonctionnements (confort, sécurité, ergonomie).
-- Proposer des améliorations concrètes.
-
-🧩 Méthode de travail
-1. Observe les données du PGI (type de poste, effectif, remarques éventuelles).
-2. Repère ce qui pose problème : surcharge, équipement manquant, matériel obsolète…
-3. Classe tes constats : ce qui est à corriger en priorité / à revoir plus tard.
-4. Propose des solutions précises : quel matériel ? pour quel poste ? à quel endroit ?
-5. Reformule tes propositions dans un document clair et structuré.
-
-📎 Productions possibles
-- Tableau “Poste / Constats / Propositions”.
-- Mail au responsable des services généraux.
-- Note interne de synthèse présentant les améliorations à prévoir.
-""",
-
-    "2 Organiser l'environnement numérique d'un service": """
-🎯 Objectif de la tâche
-- Vérifier que chaque utilisateur dispose des bons outils numériques.
-- Assurer la sécurité des accès (identifiants, droits, confidentialité).
-- Organiser l’environnement numérique de façon cohérente et efficace.
-
-🧩 Méthode de travail
-1. Identifie les utilisateurs dans les données (fonctions, services, missions).
-2. Liste les outils numériques nécessaires par profil (logiciels, accès dossiers, messagerie…).
-3. Compare avec la situation actuelle : qui a trop d’accès ? qui n’en a pas assez ?
-4. Repère les risques (partage de mot de passe, accès trop large, dossiers sensibles).
-5. Propose une nouvelle organisation : droits d’accès, règles de nommage, bonnes pratiques.
-
-📎 Productions possibles
-- Tableau “Utilisateur / Outils nécessaires / Droits proposés”.
-- Procédure interne sur les règles d’utilisation des outils numériques.
-- Mail de rappel des bonnes pratiques de sécurité informatique.
-""",
-
-    "3 Gérer les ressources partagées de l'organisation": """
-🎯 Objectif de la tâche
-- Organiser l’accès à des ressources partagées (salles, véhicules, matériels, fournitures…).
-- Limiter les conflits d’usage et les ruptures de stock.
-- Mettre en place un suivi clair et exploitable.
-
-🧩 Méthode de travail
-1. Analyse les données (stocks, plannings, réservations, niveaux d’alerte).
-2. Repère les problèmes : ruptures fréquentes, doublons, réservations en conflit…
-3. Classe les ressources : très utilisées / peu utilisées / critiques.
-4. Propose des règles de gestion (priorités, délais, seuils minimum, validation).
-5. Prépare un support de suivi : tableau de réservation, grille de stock, planning.
-
-📎 Productions possibles
-- Nouveau tableau de gestion des ressources partagées.
-- Note interne expliquant les nouvelles règles d’utilisation.
-- Message d’information aux utilisateurs concernant la nouvelle organisation.
-""",
-
-    "4 Organiser le partage de l'information": """
-🎯 Objectif de la tâche
-- Assurer une circulation fluide et fiable de l’information dans le service.
-- Choisir les bons canaux (mail, intranet, affichage, outil collaboratif).
-- Harmoniser la présentation des informations.
-
-🧩 Méthode de travail
-1. Identifie les informations à partager (consignes, procédures, comptes rendus…).
-2. Repère pour chaque info : qui doit la recevoir ? à quel moment ? par quel canal ?
-3. Analyse les données existantes (doublons, infos manquantes, documents obsolètes).
-4. Propose une organisation : dossiers partagés, droits d’accès, modèles de documents.
-5. Prépare un exemple concret d’information partagée (message, note, publication).
-
-📎 Productions possibles
-- Schéma ou tableau “Type d’information / Destinataires / Canal / Fréquence”.
-- Modèle d’email ou de note interne pour diffuser une information.
-- Proposition de structure de dossier partagé (arborescence de fichiers).
-""",
-
-    "5 Participer au lancement d'une nouvelle gamme": """
-🎯 Objectif de la tâche
-- Préparer et organiser les actions administratives liées au lancement.
-- Coordonner les intervenants (fournisseurs, clients, service com, service commercial).
-- Assurer le suivi des éléments opérationnels (planning, stocks, supports).
-
-🧩 Méthode de travail
-1. Analyse les informations disponibles : produits, dates, quantités, interlocuteurs.
-2. Liste toutes les tâches à réaliser avant, pendant et après le lancement.
-3. Organise ces tâches dans un planning (qui fait quoi ? pour quand ?).
-4. Vérifie les contraintes : délais fournisseurs, délais de livraison, validation interne.
-5. Prépare un document de synthèse pour suivre l’avancement.
-
-📎 Productions possibles
-- Plan d’actions ou rétroplanning du lancement.
-- Tableau “Tâche / Responsable / Date / Statut”.
-- Mail de coordination adressé aux différents intervenants.
-""",
-
-    "6 Organiser et suivre des réunions": """
-🎯 Objectif de la tâche
-- Préparer une réunion efficace (ordre du jour, participants, documents).
-- Assurer le suivi administratif avant et après la réunion.
-- Tracer les décisions prises et les actions à mener.
-
-🧩 Méthode de travail
-1. Identifie l’objectif de la réunion et les thèmes à aborder.
-2. Liste les participants indispensables et leurs rôles.
-3. Prépare un ordre du jour clair et hiérarchisé.
-4. Organise les éléments logistiques : salle, matériel, invitation, visio si besoin.
-5. Après la réunion : note les décisions, les actions, les responsables et les échéances.
-
-📎 Productions possibles
-- Convocation ou invitation à la réunion (mail ou document).
-- Ordre du jour structuré.
-- Compte rendu ou relevé de décisions sous forme de tableau.
-""",
-
-    "7 Organiser un déplacement": """
-🎯 Objectif de la tâche
-- Préparer un déplacement professionnel dans le respect du budget et des règles de l’organisation.
-- Coordonner transport, hébergement et contraintes horaires.
-- Fournir au salarié un dossier de déplacement clair et complet.
-
-🧩 Méthode de travail
-1. Analyse les besoins : qui part ? quand ? pour quel motif ? où ? combien de temps ?
-2. Recherche les solutions possibles (train, avion, hôtel…) en respectant les consignes internes.
-3. Compare les options : coût, durée, horaires, conditions d’annulation.
-4. Choisis la solution la plus adaptée et note les références (réservation, horaires, adresses).
-5. Prépare un récapitulatif lisible pour le salarié et/ou la hiérarchie.
-
-📎 Productions possibles
-- Itinéraire détaillé (trajet, horaires, numéros de réservation).
-- Tableau comparatif des solutions envisagées.
-- Mail de confirmation du déplacement envoyé au salarié.
-""",
-
-    "8 Participer au recrutement du personnel": """
-🎯 Objectif de la tâche
-- Participer à la préparation d’un recrutement (profil, annonce, tri des candidatures).
-- Respecter les règles de non-discrimination et de confidentialité.
-- Faciliter le travail du recruteur ou du service RH.
-
-🧩 Méthode de travail
-1. Identifie le poste à pourvoir : missions, compétences, type de contrat, durée.
-2. Vérifie ou rédige l’offre d’emploi (intitulé, profil recherché, lieu, horaires…).
-3. Analyse les candidatures : CV, lettres, adéquation avec le profil.
-4. Classe les candidatures (retenu / en attente / refusé) avec des critères objectifs.
-5. Prépare les actions suivantes : convocations, demandes de compléments, réponses négatives.
-
-📎 Productions possibles
-- Grille de tri des candidatures (critères + appréciations).
-- Projet de mail de convocation à un entretien.
-- Modèle de réponse à une candidature non retenue.
-""",
-
-    "9 Participer à l'intégration du personnel": """
-🎯 Objectif de la tâche
-- Préparer l’arrivée d’un(e) nouveau(elle) salarié(e).
-- Assurer les formalités administratives d’accueil.
-- Faciliter son intégration dans l’équipe et l’organisation.
-
-🧩 Méthode de travail
-1. Liste les démarches à effectuer avant l’arrivée (compte informatique, badge, matériel, documents…).
-2. Prépare le parcours d’intégration : qui va le/la accueillir ? quel programme le 1er jour ?
-3. Vérifie les documents obligatoires (contrat, règlement intérieur, consignes de sécurité).
-4. Prépare un kit d’accueil (documents utiles, contacts, planning).
-5. Organise éventuellement une présentation au reste de l’équipe.
-
-📎 Productions possibles
-- Check-list “À faire avant l’arrivée / le jour J / la première semaine”.
-- Mail d’accueil envoyé au nouveau salarié.
-- Programme d’intégration sur 1 ou 2 jours.
-""",
-
-    "10 Actualiser les dossiers du personnel": """
-🎯 Objectif de la tâche
-- Mettre à jour les informations administratives des salariés.
-- Vérifier la conformité des dossiers (contrats, avenants, justificatifs).
-- Tracer correctement les changements (fonction, durée du travail, rémunération…).
-
-🧩 Méthode de travail
-1. Identifie les dossiers concernés : nouveaux embauchés, changements récents, régularisations.
-2. Compare les informations du PGI avec les documents reçus (contrat, avenant, courrier).
-3. Repère les éléments manquants ou incohérents (dates, coefficients, horaires…).
-4. Mets à jour les champs nécessaires dans le PGI, en respectant la procédure.
-5. Si besoin, prépare une demande de document complémentaire au salarié.
-
-📎 Productions possibles
-- Tableau de suivi des dossiers mis à jour.
-- Mail au salarié pour demander un justificatif ou confirmer une modification.
-- Note interne signalant une mise à jour importante (changement de poste, de service…).
-"""
+    "Dossier 1 – Organiser le fonctionnement des espaces de travail": {
+        "situation": "Association Écoactif Solidaire qui internalise une partie de sa comptabilité.",
+        "contexte": "Réorganisation des espaces physiques et numériques, arrivée de deux comptables.",
+        "missions": [
+            "Comparer les modes de travail (coworking, télétravail, nomadisme) et choisir celui qui convient au service comptable.",
+            "Proposer un aménagement en open space (mobilier, cloisons, espaces de travail).",
+            "Rédiger un compte rendu de visite d’un espace de coworking.",
+            "Lister le matériel à acheter pour les comptables et justifier chaque élément.",
+            "Argumenter l’intérêt d’un PGI pour l’association."
+        ],
+        "types_production": "Compte rendu, mail professionnel, tableau de matériel, justification écrite."
+    },
+    "Dossier 2 – Organiser l’environnement numérique d’un service": {
+        "situation": "Toujours Écoactif Solidaire, mais focalisé sur les outils et réseaux numériques.",
+        "contexte": "Les comptables travaillent en open space et en télétravail, il faut adapter l’environnement numérique.",
+        "missions": [
+            "Distinguer Internet, intranet, extranet et ENT.",
+            "Proposer un schéma d’environnement numérique pour l’association.",
+            "Identifier les avantages / limites du cloud.",
+            "Lister les contraintes réglementaires principales (données personnelles, sauvegardes).",
+            "Planifier les étapes de mise en œuvre pour le service comptable."
+        ],
+        "types_production": "Diapositive de synthèse, tableau comparatif, mini-plan d’actions."
+    },
+    "Dossier 3 – Gérer les ressources partagées de l’organisation": {
+        "situation": "Association Écoactif Solidaire en open space.",
+        "contexte": "Nouveaux modes de travail ⇒ besoin d’optimiser la gestion des fournitures, salles, véhicules.",
+        "missions": [
+            "Ranger et inventorier les fournitures selon une méthode structurée.",
+            "Analyser les risques d’une mauvaise gestion des stocks.",
+            "Proposer un nouveau fonctionnement (réserve centrale, fiches ou fichier de suivi).",
+            "Concevoir un outil de réservation des ressources (salles, véhicules…)."
+        ],
+        "types_production": "Tableau d’inventaire, fiche procédure, maquette de base de données."
+    },
+    "Dossier 4 – Organiser le partage de l’information": {
+        "situation": "Toujours Écoactif Solidaire.",
+        "contexte": "Communication interne jugée insuffisante, besoin de plus de collaboratif.",
+        "missions": [
+            "Analyser les canaux actuels (mails, affichage, réunions…).",
+            "Définir une nouvelle stratégie de communication interne.",
+            "Proposer une structure d’espace Teams / plateforme collaborative (équipes, canaux, droits)."
+        ],
+        "types_production": "Diagnostic, plan d’action, capture ou schéma d’arborescence de l’outil collaboratif."
+    },
+    "Dossier 5 – Participer au lancement d’une nouvelle gamme": {
+        "situation": "Entreprise Océaform (institut de soins).",
+        "contexte": "Lancement d’une nouvelle gamme de produits, vous êtes intérimaire en renfort.",
+        "missions": [
+            "Construire un planigramme des tâches liées au lancement.",
+            "Préparer une proposition de conditions commerciales avec le fournisseur.",
+            "Préparer des supports de communication (affiche, mail, publication réseaux)."
+        ],
+        "types_production": "Planning, tableau de négociation, supports de com’ (Word, Canva…)."
+    },
+    "Dossier 6 – Organiser et suivre des réunions": {
+        "situation": "Toujours Océaform.",
+        "contexte": "Réunions de préparation du lancement et visioconférence avec partenaires.",
+        "missions": [
+            "Organiser une réunion de service (ordre du jour, convocation, logistique).",
+            "Préparer et suivre une visioconférence (lien, test matériel, compte rendu)."
+        ],
+        "types_production": "Convocation, ordre du jour, feuille d’émargement, compte rendu."
+    },
+    "Dossier 7 – Organiser un déplacement": {
+        "situation": "Océaform, déplacement du personnel pour un événement.",
+        "contexte": "L’équipe se déplace (salon, formation, etc.), vous gérez le suivi administratif.",
+        "missions": [
+            "Comparer plusieurs solutions de transport / hébergement.",
+            "Préparer les réservations et le dossier de déplacement.",
+            "Vérifier les formalités (autorisations, assurances, notes de frais)."
+        ],
+        "types_production": "Tableau comparatif, feuille de route, check-list des formalités."
+    },
+    "Dossier 8 – Participer au recrutement du personnel": {
+        "situation": "Entreprise Léa Nature.",
+        "contexte": "Recrutement de nouveaux salariés.",
+        "missions": [
+            "Préparer le dossier de recrutement (profil de poste, annonce).",
+            "Trier les candidatures, proposer une présélection.",
+            "Préparer les convocations à l’entretien."
+        ],
+        "types_production": "Fiche de poste, tableau d’analyse de CV, mails de convocation."
+    },
+    "Dossier 9 – Participer à l’intégration du personnel": {
+        "situation": "Toujours Léa Nature.",
+        "contexte": "Accueil d’un nouveau salarié et animation d’un collectif.",
+        "missions": [
+            "Préparer le parcours d’intégration (planning, personnes ressources).",
+            "Concevoir un livret / guide d’accueil.",
+            "Proposer des actions pour renforcer la cohésion d’équipe."
+        ],
+        "types_production": "Planning d’intégration, brochure d’accueil, note de service."
+    },
+    "Dossier 10 – Actualiser les dossiers du personnel": {
+        "situation": "Léa Nature, service RH.",
+        "contexte": "Vérification de la complétude des dossiers, rédaction de contrats et avenants.",
+        "missions": [
+            "Compléter le dossier d’un salarié à partir d’une liste de pièces attendues.",
+            "Renseigner le registre du personnel.",
+            "Préparer un mail de relance pour pièces manquantes."
+        ],
+        "types_production": "Tableau d’arborescence du dossier, registre, mail professionnel."
+    }
 }
 
-# --- 9. GÉNÉRATEUR PGI INTELLIGENT (Par Dossier) ---
-def generate_fake_pgi_data(dossier_name):
+# --- 9. GÉNÉRATEUR PGI INTELLIGENT (PAR DOSSIER) ---
+
+def generate_fake_pgi_data(dossier_name: str) -> pd.DataFrame:
     rows = []
 
-    # 1 Organiser le fonctionnement des espaces de travail
-    if dossier_name.startswith("1 "):
-        postes = ["Accueil", "Comptabilité", "Direction", "Open space", "Archivage"]
-        for p in postes:
+    # Thème 1 : dossiers 1 à 4
+    if "Dossier 1" in dossier_name:
+        for _ in range(5):
             rows.append({
-                "Poste": p,
-                "Effectif": random.randint(1, 6),
-                "Équipement principal": random.choice(["Bureau + PC", "PC portable", "Poste partagé"]),
-                "État": random.choice(["Conforme", "À améliorer", "Saturé"]),
-                "Remarque": random.choice(["Manque de rangements", "Problème de bruit", "Rien à signaler"])
+                "Contact": f"Client {random.randint(100, 999)}",
+                "Canal": random.choice(["Mail", "Téléphone", "Accueil"]),
+                "Objet": random.choice(["Info tarif", "Disponibilité", "Horaires"]),
+                "Statut": "À traiter"
             })
 
-    # 2 Organiser l'environnement numérique d'un service
-    elif dossier_name.startswith("2 "):
-        for i in range(6):
+    elif "Dossier 2" in dossier_name:
+        for _ in range(5):
             rows.append({
-                "Salarié": random.choice(PRENOMS) + " " + random.choice(NOMS),
-                "Fonction": random.choice(["Assistant", "Comptable", "Technicien", "Commercial"]),
-                "Logiciels nécessaires": random.choice(["Suite bureautique", "PGI complet", "Outil CRM", "Outil comptable"]),
-                "Accès dossiers": random.choice(["Partagé", "Limité", "Trop large"]),
-                "Problème signalé": random.choice(["Mot de passe partagé", "Droit manquant", "Aucun"])
+                "Dossier": f"D-{random.randint(1000, 9999)}",
+                "Client": random.choice(NOMS),
+                "Type": "Prestation service",
+                "Étape": random.choice(["Devis signé", "En cours", "Terminé"]),
+                "Action": "Informer le client"
             })
 
-    # 3 Gérer les ressources partagées de l'organisation
-    elif dossier_name.startswith("3 "):
-        ressources = ["Salle réunion A", "Salle réunion B", "Véhicule 1", "Véhicule 2", "Vidéo-projecteur"]
-        for r in ressources:
+    elif "Dossier 3" in dossier_name:
+        for _ in range(4):
             rows.append({
-                "Ressource": r,
-                "Type": random.choice(["Salle", "Véhicule", "Matériel"]),
-                "Taux d'utilisation": f"{random.randint(30, 100)}%",
-                "Conflits recensés": random.randint(0, 5),
-                "Commentaire": random.choice(["Souvent réservée", "Peu utilisée", "Utilisation à organiser"])
+                "N° Litige": f"LIT-{random.randint(10, 99)}",
+                "Client": random.choice(NOMS),
+                "Motif": random.choice(["Erreur facturation", "Retard", "Produit abîmé"]),
+                "Demande": "Remboursement",
+                "Priorité": "Haute"
             })
 
-    # 4 Organiser le partage de l'information
-    elif dossier_name.startswith("4 "):
-        infos = ["Consignes de sécurité", "Planning mensuel", "Procédure accueil", "Notes de service", "Compte rendu réunion"]
-        for info in infos:
+    elif "Dossier 4" in dossier_name:
+        for _ in range(5):
             rows.append({
-                "Information": info,
-                "Support actuel": random.choice(["Mail", "Affichage", "Intranet", "Oral uniquement"]),
-                "Destinataires": random.choice(["Tous", "Service compta", "Direction", "Atelier"]),
-                "Fréquence": random.choice(["Ponctuelle", "Hebdomadaire", "Mensuelle"]),
-                "Problème": random.choice(["Information perdue", "Non à jour", "Trop de doublons", "Aucun"])
+                "Critère": random.choice(["Accueil", "Qualité", "Délai", "Prix"]),
+                "Note": f"{random.randint(1, 5)}/5",
+                "Verbatim": random.choice(["Très bien", "Déçu", "Correct", "Excellent"])
             })
 
-    # 5 Participer au lancement d'une nouvelle gamme
-    elif dossier_name.startswith("5 "):
-        taches = ["Création supports", "Commande échantillons", "Formation vendeurs", "Mise à jour tarifs", "Communication réseaux"]
-        for t in taches:
+    # Thème 2 : dossiers 5 à 7
+    elif "Dossier 5" in dossier_name:
+        produits = ["Gamme Océan Zen", "Gamme Énergie Marine", "Gamme Soins Express"]
+        for p in produits:
             rows.append({
-                "Tâche": t,
+                "Produit": p,
+                "Tâche": random.choice(["Teasing", "Lancement", "Relance"]),
                 "Responsable": random.choice(PRENOMS),
-                "Échéance": f"{random.randint(1, 30)}/09/2025",
-                "Statut": random.choice(["À faire", "En cours", "Terminé"]),
-                "Priorité": random.choice(["Haute", "Moyenne", "Basse"])
+                "Échéance": "Semaine prochaine"
             })
 
-    # 6 Organiser et suivre des réunions
-    elif dossier_name.startswith("6 "):
+    elif "Dossier 6" in dossier_name:
         for i in range(5):
             rows.append({
-                "Réunion": f"Réunion {i+1}",
-                "Objet": random.choice(["Point commercial", "Point RH", "Sécurité", "Projet X"]),
-                "Date": f"{random.randint(1, 28)}/10/2025",
-                "Participants prévus": random.randint(3, 12),
-                "Compte rendu": random.choice(["Non rédigé", "En cours", "Archivé"])
+                "Réunion": f"R{i+1}",
+                "Type": random.choice(["Réunion de service", "Visioconférence"]),
+                "Date": "15/11/2025",
+                "Statut": random.choice(["À préparer", "En cours", "Clôturée"]),
+                "Animateur": random.choice(PRENOMS)
             })
 
-    # 7 Organiser un déplacement
-    elif dossier_name.startswith("7 "):
-        villes = ["Paris", "Lyon", "Marseille", "Toulouse", "Bordeaux"]
-        for i in range(4):
+    elif "Dossier 7" in dossier_name:
+        for _ in range(5):
             rows.append({
-                "Salarié": random.choice(PRENOMS) + " " + random.choice(NOMS),
-                "Destination": random.choice(villes),
-                "Motif": random.choice(["Salon pro", "Formation", "Rendez-vous client"]),
-                "Dates": f"{random.randint(5,10)}/11 au {random.randint(11,15)}/11/2025",
-                "Statut réservation": random.choice(["À faire", "Confirmée", "En attente validation"])
+                "Salarié": f"{random.choice(PRENOMS)} {random.choice(NOMS)}",
+                "Ville": random.choice(["Paris", "Lyon", "Marseille", "Bordeaux"]),
+                "Transport": random.choice(["Train", "Avion", "Voiture"]),
+                "Hébergement": random.choice(["Hôtel", "Airbnb", "Chez partenaire"]),
+                "Statut": "À confirmer"
             })
 
-    # 8 Participer au recrutement du personnel
-    elif dossier_name.startswith("8 "):
-        postes = ["Assistant administratif", "Technicien support", "Comptable"]
-        for _ in range(6):
+    # Thème 3 : dossiers 8 à 10
+    elif "Dossier 8" in dossier_name:
+        postes = ["Assistant administratif", "Comptable", "Technicien logistique"]
+        for _ in range(5):
             rows.append({
                 "Candidat": f"{random.choice(PRENOMS)} {random.choice(NOMS)}",
                 "Poste visé": random.choice(postes),
                 "Diplôme": random.choice(["Bac Pro", "BTS", "Licence"]),
-                "Expérience": f"{random.randint(0, 5)} ans",
-                "Statut dossier": random.choice(["À étudier", "Retenu", "Refusé"])
+                "Expérience": f"{random.randint(0,5)} ans",
+                "Statut": random.choice(["À étudier", "Retenu", "Refusé"])
             })
 
-    # 9 Participer à l'intégration du personnel
-    elif dossier_name.startswith("9 "):
-        étapes = ["Préparation poste", "Création compte informatique", "Remise badge", "Présentation équipe", "Formation sécurité"]
-        for e in étapes:
-            rows.append({
-                "Étape": e,
-                "Responsable": random.choice(["RH", "Manager", "Accueil"]),
-                "Délai": random.choice(["Avant arrivée", "Jour J", "Semaine 1"]),
-                "Statut": random.choice(["À faire", "En cours", "Terminé"]),
-                "Commentaire": random.choice(["Prioritaire", "Peut être délégué", "À vérifier"])
-            })
-
-    # 10 Actualiser les dossiers du personnel
-    elif dossier_name.startswith("10 "):
+    elif "Dossier 9" in dossier_name:
         for _ in range(6):
             rows.append({
                 "Salarié": f"{random.choice(PRENOMS)} {random.choice(NOMS)}",
-                "Type de modification": random.choice(["Avenant temps de travail", "Changement de poste", "Mise à jour adresse"]),
-                "Document reçu": random.choice(["Oui", "Non"]),
-                "PGI à jour": random.choice(["Oui", "Non"]),
-                "Remarque": random.choice(["Relancer salarié", "Faire signer", "Archiver"])
+                "Jour 1": "Accueil / visite",
+                "Jour 2": "Formation poste",
+                "Jour 3": "Suivi tuteur",
+                "Référent": random.choice(PRENOMS)
+            })
+
+    elif "Dossier 10" in dossier_name:
+        for _ in range(5):
+            rows.append({
+                "Salarié": f"{random.choice(PRENOMS)} {random.choice(NOMS)}",
+                "Contrat": random.choice(["CDI", "CDD", "Apprentissage"]),
+                "Dossier complet": random.choice(["Oui", "Non"]),
+                "Pièces manquantes": random.choice(["Diplômes", "Justificatif domicile", "Pièce d'identité", "Aucune"]),
+                "Action": "Relance à faire" if random.random() < 0.6 else "OK"
             })
 
     else:
-        rows.append({"Info": "Pas de données spécifiques pour ce dossier."})
+        rows.append({"Info": "Pas de données spécifiques"})
 
     return pd.DataFrame(rows)
 
-# --- 10. IA (PROMPT "EVALUATEUR CCF") ---
+# --- 10. IA (PROMPT ÉVALUATEUR CCF) ---
+
 SYSTEM_PROMPT = """
 RÔLE : Tu es le Tuteur de stage et Evaluateur CCF (Bac Pro AGOrA).
 TON : Professionnel, directif.
 
 OBJECTIF : Faire réaliser une TÂCHE ADMINISTRATIVE liée au DOSSIER choisi.
 
-CONSIGNE À L'IA :
-1. IDENTIFIE la tâche du dossier.
-2. UTILISE LE PGI : Les données sont ci-dessous. Interroge l'élève dessus.
-3. NE DONNE PAS LA RÉPONSE.
-4. DEMANDE UNE PRODUCTION (Mail, Tableau, Courrier).
-
-SÉCURITÉ : Données réelles -> STOP.
+CONSigne :
+1. IDENTIFIER la tâche du dossier (ex: Dossier 7 = déplacement -> faire les réservations, les documents).
+2. UTILISER LE PGI : Les données sont fournies ci-dessous. Interroge l'élève dessus.
+3. NE PAS DONNER la réponse finale.
+4. DEMANDER une PRODUCTION concrète (mail, tableau, courrier, document Word ou Excel).
+5. Rester dans le contexte Bac Pro AGOrA et dans le dossier sélectionné.
 """
 
 INITIAL_MESSAGE = """
 👋 **Bonjour.**
 
-Bienvenue dans le module **Pro'AGOrA**.
-Veuillez choisir votre **Dossier** dans le menu de gauche.
+Bienvenue dans le module **Pro'AGOrA** (aligné sur le manuel *Assurer le suivi administratif des activités* – 1re Bac Pro AGOrA).
+Choisis une **Partie** et un **Dossier** dans le menu de gauche, puis lance la mission.
 """
 
 if not st.session_state.messages:
     st.session_state.messages.append({"role": "assistant", "content": INITIAL_MESSAGE})
 
-def lancer_mission(prenom):
+
+def lancer_mission(prenom: str):
     lieu = random.choice(TYPES_ORGANISATIONS)
     ville = random.choice(VILLES_FRANCE)
 
@@ -586,67 +562,73 @@ def lancer_mission(prenom):
     pgi_txt = st.session_state.pgi_data.to_string() if st.session_state.pgi_data is not None else "Aucune donnée."
 
     prompt = f"""
-    DÉMARRAGE.
+    DÉMARRAGE MISSION.
     STAGIAIRE : {prenom}.
-    CONTEXTE : {lieu} à {ville}.
+    CONTEXTE : Organisation de type "{lieu}" située à {ville}.
+    PARTIE DU MANUEL : {theme}.
     DOSSIER : {dossier}.
-    COMPÉTENCE : {competence}.
+    RÉSUMÉ COMPÉTENCES : {competence}
 
-    DONNÉES PGI :
+    DONNÉES PGI (FICTIVES) :
     {pgi_txt}
 
     ACTION :
     1. Accueille l'élève.
-    2. Présente le contexte.
-    3. Donne la 1ère consigne liée à ce dossier précis.
+    2. Rappelle le contexte professionnel.
+    3. Explique la mission liée au dossier.
+    4. Formule une première consigne précise (production attendue en Word ou Excel si pertinent).
     """
 
-    msgs = [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}]
+    msgs = [{"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": prompt}]
     with st.spinner("Chargement du dossier..."):
-        resp, status = query_groq_with_rotation(msgs)
+        resp, _ = query_groq_with_rotation(msgs)
         if resp is None:
-            resp = "⚠️ L'agent n'est pas disponible pour le moment (problème de configuration ou saturation). Préviens ton professeur."
+            resp = "Désolé, le service d'IA n'est pas disponible pour le moment."
         st.session_state.messages.append({"role": "assistant", "content": resp})
     add_notification(f"Dossier lancé : {dossier}")
 
-def generer_bilan_ccf(student_name, dossier):
-    """Génère le bilan officiel pour le professeur"""
+
+def generer_bilan_ccf(student_name: str, dossier: str) -> str:
+    """Génère un bilan type CCF à partir de l'historique de la session."""
     history = [m["content"] for m in st.session_state.messages]
     full_text = "\n".join(history)
 
     prompt_bilan = f"""
-    AGIS COMME UN INSPECTEUR DE L'ÉDUCATION NATIONALE.
+    Tu es Inspecteur de l'Éducation nationale, jury CCF Bac Pro AGOrA.
 
     Élève : {student_name}
-    Mission : {dossier}
+    Dossier travaillé : {dossier}
 
-    ANALYSE CETTE SESSION D'EXAMEN CCF (Bac Pro AGORA) :
+    TRANSCRIPTION DE LA SÉANCE (dialogue tuteur / élève) :
     {full_text}
 
-    RÉDIGE LE BILAN FINAL (FICHE D'ÉVALUATION) À L'ATTENTION DU JURY :
+    PRODUIS UN BILAN STRUCTURÉ pour le professeur :
 
     1. 🏢 CONTEXTE PROFESSIONNEL
-       - Structure : [Citer le lieu/ville]
-       - Mission : [Citer la mission]
+       - Structure d'accueil
+       - Missions confiées à l'élève
 
     2. ✅ ACTIVITÉS RÉALISÉES PAR LE CANDIDAT
-       - [Lister les tâches effectuées factuellement]
+       - Liste factuelle des tâches réalisées ou simulées.
 
-    3. 📊 ÉVALUATION DES COMPÉTENCES (Utiliser : NOVICE / FONCTIONNEL / MAÎTRISE)
-       - Communication écrite : [Niveau] + [Justification]
-       - Usage des outils numériques (PGI) : [Niveau] + [Justification]
-       - Respect des procédures : [Niveau] + [Justification]
+    3. 📊 ÉVALUATION DES COMPÉTENCES (NIVEAUX : NOVICE / FONCTIONNEL / MAÎTRISE)
+       - Communication écrite
+       - Usage des outils numériques (PGI, Word/Excel)
+       - Respect des procédures administratives
 
     4. 📝 APPRÉCIATION GLOBALE
-       - [Rédiger 2 phrases de synthèse sur la prestation du candidat à la 3ème personne ("L'élève a...", "Le candidat démontre...")]
+       - 2 à 3 phrases à la 3e personne : 'L'élève a...', 'Le candidat démontre...'
+
+    Style attendu : clair, professionnel, directement exploitable dans un dossier CCF.
     """
 
-    msgs = [{"role": "system", "content": "Tu es un Inspecteur IEN neutre et bienveillant."},
-            {"role": "user", "content": prompt_bilan}]
-    resp, status = query_groq_with_rotation(msgs)
-    if resp is None:
-        resp = "⚠️ Impossible de générer le bilan pour le moment (problème de configuration ou saturation de l'IA)."
-    return resp
+    msgs = [
+        {"role": "system", "content": "Tu es un Inspecteur IEN neutre et bienveillant."},
+        {"role": "user", "content": prompt_bilan},
+    ]
+    bilan, _ = query_groq_with_rotation(msgs)
+    return bilan or "Impossible de générer le bilan (problème d'IA)."
 
 # --- 11. INTERFACE GRAPHIQUE ---
 
@@ -668,143 +650,182 @@ with st.sidebar:
     st.progress(min(st.session_state.xp / 1000, 1.0))
     st.caption(f"XP : {st.session_state.xp}")
 
-    # Journal de bord / notifications
-    with st.expander("📝 Journal de bord"):
-        for note in st.session_state.notifications[:10]:
-            st.caption(note)
+    student_name = st.text_input("Prénom de l'élève", placeholder="Ex : Camille")
 
-    student_name = st.text_input("Prénom", placeholder="Ex: Camille")
+    st.subheader("📂 Sommaire Foucher (1re Bac Pro AGOrA)")
+    st.session_state.theme = st.selectbox(
+        "Partie du manuel",
+        list(DB_OFFICIELLE.keys())
+    )
+    st.session_state.dossier = st.selectbox(
+        "Dossier",
+        list(DB_OFFICIELLE[st.session_state.theme].keys())
+    )
 
-    st.subheader("📂 Dossiers")
-    st.session_state.theme = st.selectbox("Thème", list(DB_OFFICIELLE.keys()))
-    st.session_state.dossier = st.selectbox("Dossier", list(DB_OFFICIELLE[st.session_state.theme].keys()))
-
-    if st.button("LANCER", type="primary"):
+    if st.button("LANCER LA MISSION", type="primary", use_container_width=True):
         if student_name:
             lancer_mission(student_name)
             st.rerun()
         else:
-            st.warning("Prénom requis")
+            st.warning("Merci de saisir le prénom de l'élève.")
 
-    if st.button("✅ ÉTAPE VALIDÉE"):
+    if st.button("✅ ÉTAPE VALIDÉE", use_container_width=True):
         update_xp(10)
         st.rerun()
 
-    # OUTILS - Rendu Word
     st.markdown("---")
-    uploaded_file = st.file_uploader("Rendre un travail (Word)", type=['docx'], key="word_uploader")
-    if uploaded_file and student_name:
-        if st.button("Envoyer", key="btn_envoyer_word"):
-            txt = extract_text_from_docx(uploaded_file)
-            st.session_state.messages.append({"role": "user", "content": f"PROPOSITION : {txt}"})
+    st.markdown("### 📤 Rendre un travail")
+
+    uploaded_work = st.file_uploader(
+        "Fichier élève (Word / Excel / CSV)",
+        type=['docx', 'xlsx', 'xls', 'csv']
+    )
+
+    if uploaded_work and student_name:
+        if st.button("Envoyer le travail", use_container_width=True):
+            ext = os.path.splitext(uploaded_work.name)[1].lower()
+            if ext == ".docx":
+                txt = extract_text_from_docx(uploaded_work)
+            else:
+                txt = extract_text_from_table_file(uploaded_work)
+
+            st.session_state.messages.append({
+                "role": "user",
+                "content": f"PROPOSITION DE L'ÉLÈVE (extrait du fichier {uploaded_work.name}) :\n\n{txt}"
+            })
             update_xp(20)
-            add_notification(f"Document Word remis par {student_name}")
             st.rerun()
+    elif uploaded_work and not student_name:
+        st.info("Renseigner le prénom avant d'envoyer un travail.")
 
-    # OUTILS - Charger une sauvegarde CSV
+    # BILAN CCF
     st.markdown("---")
-    csv_upload = st.file_uploader("Charger une sauvegarde (CSV)", type=['csv'], key="csv_loader")
-    if csv_upload is not None:
-        if st.button("Importer la sauvegarde", key="btn_import_csv"):
-            try:
-                df_chat = pd.read_csv(csv_upload)
-                if {"role", "content"}.issubset(df_chat.columns):
-                    st.session_state.messages = df_chat[["role", "content"]].to_dict(orient="records")
-                    add_notification("Sauvegarde CSV importée.")
-                    st.success("Conversation rechargée depuis le fichier CSV.")
-                    st.rerun()
-                else:
-                    st.error("Le fichier CSV ne contient pas les colonnes 'role' et 'content'.")
-            except Exception as e:
-                st.error(f"Erreur lors de la lecture du CSV : {e}")
-
-    # BILAN
-    st.markdown("---")
-    if st.button("📝 Générer Bilan CCF"):
-        if not student_name:
-            st.warning("Prénom requis pour générer le bilan.")
-        elif len(st.session_state.messages) <= 2:
-            st.warning("Travaillez d'abord avec l'agent avant de générer un bilan.")
-        else:
-            with st.spinner("Rédaction du Bilan Officiel..."):
+    if st.button("📝 Générer Bilan CCF", use_container_width=True):
+        if student_name and len(st.session_state.messages) > 2:
+            with st.spinner("Rédaction du bilan officiel..."):
                 bilan = generer_bilan_ccf(student_name, st.session_state.dossier)
                 st.session_state.bilan_ready = bilan
-                add_notification(f"Bilan CCF généré pour {student_name}")
             st.rerun()
+        else:
+            st.warning("Il faut d'abord avoir travaillé avec l'élève (échanges dans le chat).")
 
     if st.session_state.bilan_ready:
         st.download_button(
-            label="📥 Télécharger Fiche Bilan",
+            label="📥 Télécharger Fiche Bilan (txt)",
             data=st.session_state.bilan_ready,
-            file_name=f"Bilan_CCF_{student_name if student_name else 'Eleve'}.txt",
-            mime="text/plain"
+            file_name=f"Bilan_CCF_{student_name}.txt",
+            mime="text/plain",
+            use_container_width=True
         )
 
-    # SAUVEGARDE
-    csv_data = ""
+    # SAUVEGARDE / RESTAURATION
+    st.markdown("---")
+    st.markdown("### 💾 Sauvegarde de la session")
+
+    csv_data = b""
     btn_state = True
     if len(st.session_state.messages) > 0:
         chat_df = pd.DataFrame(st.session_state.messages)
-        csv_data = chat_df.to_csv(index=False).encode('utf-8')
+        csv_data = chat_df.to_csv(index=False).encode("utf-8")
         btn_state = False
 
-    st.download_button("💾 Sauvegarder la conversation", csv_data, "agora_save.csv", "text/csv", disabled=btn_state)
+    st.download_button(
+        "💾 Télécharger la sauvegarde (CSV)",
+        csv_data,
+        "agora_session.csv",
+        "text/csv",
+        disabled=btn_state,
+        use_container_width=True,
+    )
 
-    if st.button("🗑️ Reset"):
+    restore_file = st.file_uploader(
+        "♻️ Recharger une sauvegarde (CSV)",
+        type=["csv"],
+        help="Permet à un élève de renvoyer son fichier de sauvegarde pour reprendre la séance."
+    )
+    if restore_file is not None:
+        try:
+            df_restore = pd.read_csv(restore_file)
+            if {"role", "content"}.issubset(df_restore.columns):
+                st.session_state.messages = df_restore[["role", "content"]].to_dict(orient="records")
+                st.success("Conversation rechargée depuis le CSV.")
+                st.rerun()
+            else:
+                st.warning("Le CSV doit contenir les colonnes 'role' et 'content'.")
+        except Exception as e:
+            st.error(f"Impossible d'importer le fichier : {e}")
+
+    if st.button("🗑️ Reset complet", use_container_width=True):
         st.session_state.messages = [{"role": "assistant", "content": INITIAL_MESSAGE}]
         st.session_state.pgi_data = None
         st.session_state.bilan_ready = None
-        add_notification("Réinitialisation de la session.")
         st.rerun()
 
-# --- HEADER ---
+# --- HEADER PRINCIPAL ---
 c1, c2, c3, c4, c5 = st.columns([3, 1, 1, 1, 1])
+
 with c1:
     logo_html = ""
     if os.path.exists(LOGO_AGORA):
         b64 = img_to_base64(LOGO_AGORA)
         logo_html = f'<img src="data:image/png;base64,{b64}" style="height:40px; margin-right:10px;">'
     st.markdown(
-        f"""<div style="display:flex; align-items:center;">
-        {logo_html}
-        <div>
-            <div style="font-size:22px; font-weight:bold; color:#202124;">Agence Pro'AGOrA</div>
-            <div style="font-size:12px; color:#5F6368;">Données fictives uniquement</div>
+        f"""
+        <div style="display:flex; align-items:center;">
+            {logo_html}
+            <div>
+                <div style="font-size:22px; font-weight:bold; color:#202124;">Agence Pro'AGOrA</div>
+                <div style="font-size:12px; color:#5F6368;">Aligné sur "Assurer le suivi administratif des activités" – 1re Bac Pro AGOrA</div>
+            </div>
         </div>
-        </div>""",
-        unsafe_allow_html=True
+        """,
+        unsafe_allow_html=True,
     )
 
 with c2:
     with st.popover("ℹ️ Aide Métier"):
-        st.info("Consultez vos cours ou des ressources métier pour répondre.")
-        st.link_button("Fiches Métiers", "https://www.onisep.fr")
+        st.info("Appuie-toi sur le manuel, les fiches de cours et les sites institutionnels (service-public.fr, ameli.fr...).")
+        st.link_button("Fiches ONISEP", "https://www.onisep.fr")
 
 with c3:
     with st.popover("❓ Aide Outil"):
-        st.link_button("Accès ENT", "https://cas.ent.auvergnerhonealpes.fr/login?service=https%3A%2F%2Fglieres.ent.auvergnerhonealpes.fr%2Fsg.do%3FPROC%3DPAGE_ACCUEIL")
+        st.link_button(
+            "Accès ENT",
+            "https://cas.ent.auvergnerhonealpes.fr/login?service=https%3A%2F%2Fglieres.ent.auvergnerhonealpes.fr%2Fsg.do%3FPROC%3DPAGE_ACCUEIL",
+        )
 
 with c4:
     user_label = f"👤 {student_name}" if student_name else "👤 Invité"
     st.button(user_label, disabled=True, use_container_width=True)
 
-st.markdown("<hr style='margin: 0 0 20px 0;'>", unsafe_allow_html=True)
+st.markdown("<hr style='margin: 0 0 10px 0;'>", unsafe_allow_html=True)
+
+# --- FICHE D'AIDE DU DOSSIER SÉLECTIONNÉ ---
+
+dossier_courant = st.session_state.dossier
+fiche_aide = AIDES_DOSSIERS.get(dossier_courant)
+
+if fiche_aide:
+    with st.expander("📎 Fiche d'aide (résumé du manuel pour ce dossier)", expanded=False):
+        st.markdown(f"**Situation professionnelle :** {fiche_aide['situation']}")
+        st.markdown(f"**Contexte :** {fiche_aide['contexte']}")
+        st.markdown("**Missions typiques à confier à l'élève :**")
+        for m in fiche_aide["missions"]:
+            st.markdown(f"- {m}")
+        st.markdown(f"**Types de productions attendues :** {fiche_aide['types_production']}")
+
+st.markdown("<br>", unsafe_allow_html=True)
 
 # --- AFFICHAGE PGI (PREUVES) ---
 if st.session_state.pgi_data is not None:
-    st.markdown(f'<div class="pgi-title">📁 DOCUMENTS ({st.session_state.dossier})</div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="pgi-title">📁 Données métier fictives (PGI) – {st.session_state.dossier}</div>',
+        unsafe_allow_html=True,
+    )
     with st.container():
         st.markdown('<div class="pgi-container">', unsafe_allow_html=True)
         st.dataframe(st.session_state.pgi_data, use_container_width=True, hide_index=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    # AIDE LIÉE AU DOSSIER
-    aide = AIDES_DOSSIERS.get(st.session_state.dossier)
-    with st.expander("📘 Aide pour réussir cet exercice"):
-        if aide:
-            st.markdown(aide)
-        else:
-            st.info("Aucune fiche d'aide n'est encore définie pour ce dossier.")
+        st.markdown("</div>", unsafe_allow_html=True)
 
 # --- CHAT ---
 for i, msg in enumerate(st.session_state.messages):
@@ -812,56 +833,66 @@ for i, msg in enumerate(st.session_state.messages):
     with st.chat_message(msg["role"], avatar=avatar):
         st.markdown(msg["content"])
         if msg["role"] == "assistant" and HAS_AUDIO:
-            if st.button("🔊", key=f"tts_{i}"):
+            # petit bouton audio facultatif par message
+            if st.button("🔊 Lire le message", key=f"tts_{i}"):
                 try:
-                    tts = gTTS(clean_text_for_audio(msg["content"]), lang='fr')
+                    tts = gTTS(clean_text_for_audio(msg["content"]), lang="fr")
                     buf = BytesIO()
                     tts.write_to_fp(buf)
                     st.audio(buf, format="audio/mp3", start_time=0)
                 except Exception:
-                    pass
+                    st.warning("Lecture audio impossible pour ce message.")
 
 st.markdown("<br><br>", unsafe_allow_html=True)
 
-# --- INPUT ---
-st.markdown('<div class="fixed-footer">Agence Pro\'AGOrA - Données Fictives Uniquement</div>', unsafe_allow_html=True)
+# --- INPUT CHAT ---
+st.markdown(
+    '<div class="fixed-footer">Agence Pro\'AGOrA - Données 100 % fictives (inspirées du manuel Foucher, corrigé enseignant)</div>',
+    unsafe_allow_html=True,
+)
 
-if user_input := st.chat_input("Votre réponse..."):
+if user_input := st.chat_input("Votre réponse, votre question ou votre production (résumé de votre Word/Excel)…"):
     if not student_name:
-        st.toast("Identifiez-vous !", icon="👤")
+        st.toast("Identifiez-vous (prénom) avant de répondre.", icon="👤")
     else:
         st.session_state.messages.append({"role": "user", "content": user_input})
-        add_notification(f"Réponse élève : {student_name}")
         st.rerun()
 
+# --- RÉPONSE AUTOMATIQUE SI DERNIER MESSAGE = ÉLÈVE ---
 if st.session_state.messages and st.session_state.messages[-1]["role"] == "user":
     with st.chat_message("assistant", avatar=BOT_AVATAR):
-        with st.spinner("Analyse..."):
+        with st.spinner("Analyse de ta réponse…"):
             sys = SYSTEM_PROMPT
             pgi_str = ""
             if st.session_state.pgi_data is not None:
                 pgi_str = st.session_state.pgi_data.to_string()
 
-            aide_dossier = AIDES_DOSSIERS.get(st.session_state.dossier, "")
+            dernier_texte_eleve = st.session_state.messages[-1]["content"]
 
             prompt_tour = f"""
-            DONNÉES PGI (PREUVE) : {pgi_str}
-            RÉPONSE ÉLÈVE : "{user_input}"
-            MISSION : {st.session_state.dossier}
+            CONTEXTE DOSSIER : {st.session_state.dossier}
+            PARTIE : {st.session_state.theme}
 
-            RÉFÉRENCE PÉDAGOGIQUE (à utiliser comme ligne directrice, sans la restituer telle quelle) :
-            {aide_dossier}
+            DONNÉES PGI (fictives, à exploiter) :
+            {pgi_str}
 
-            CONSIGNE :
-            1. Vérifie si l'élève utilise bien le PGI.
-            2. Si oui, valide et demande la production suivante (mail, tableau, note...).
-            3. Si non, corrige-le et redirige-le vers les données utiles.
+            DERNIÈRE RÉPONSE DE L'ÉLÈVE :
+            \"\"\"{dernier_texte_eleve}\"\"\"
+
+            CONSIGNE POUR LE TUTEUR IA :
+            1. Vérifie si l'élève utilise correctement les informations du PGI et du contexte (manuel Foucher).
+            2. Si la réponse est pertinente, VALIDE un point, précise ce qui est bien, puis propose la prochaine étape
+               (ex : rédiger le mail complet dans Word, construire le tableau Excel…).
+            3. Si la réponse est incomplète ou hors sujet, explique clairement ce qui manque et donne une consigne guidée.
+            4. Reste toujours dans le même dossier et le même contexte.
             """
 
-            msgs = [{"role": "system", "content": sys}, {"role": "user", "content": prompt_tour}]
-            resp, status = query_groq_with_rotation(msgs)
+            msgs = [
+                {"role": "system", "content": sys},
+                {"role": "user", "content": prompt_tour},
+            ]
+            resp, _ = query_groq_with_rotation(msgs)
             if resp is None:
-                resp = "⚠️ L'agent ne peut pas analyser ta réponse pour le moment. Préviens ton professeur."
+                resp = "Je n'arrive pas à analyser ta réponse pour le moment. Réessaie dans quelques instants."
             st.markdown(resp)
             st.session_state.messages.append({"role": "assistant", "content": resp})
-            add_notification("Réponse de l'agent générée.")
