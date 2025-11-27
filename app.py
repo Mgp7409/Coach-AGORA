@@ -11,6 +11,7 @@ from groq import Groq
 # --- 0. DÉPENDANCES & SÉCURITÉ ---
 try:
     from docx import Document
+    from docx.shared import RGBColor # <--- AJOUT IMPORTANT ICI
 except ImportError:
     st.error("⚠️ ERREUR CRITIQUE : Le module 'python-docx' manque. Ajoutez 'python-docx' au fichier requirements.txt")
     st.stop()
@@ -179,7 +180,12 @@ def create_docx_history(messages, student_name):
         p = doc.add_paragraph()
         runner = p.add_run(f"{role_name} :")
         runner.bold = True
-        runner.font.color.rgb = (0, 0, 255) if msg["role"] == "assistant" else (0, 100, 0) # Bleu IA, Vert Élève
+        
+        # --- CORRECTION COULEUR ICI ---
+        if msg["role"] == "assistant":
+            runner.font.color.rgb = RGBColor(0, 0, 255) # Bleu IA
+        else:
+            runner.font.color.rgb = RGBColor(0, 100, 0) # Vert Élève
         
         doc.add_paragraph(msg["content"])
         doc.add_paragraph("") # Espace
