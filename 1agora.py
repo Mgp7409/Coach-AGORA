@@ -22,7 +22,6 @@ except ImportError:
     HAS_AUDIO = False
 
 # --- 1. CONFIGURATION DE LA PAGE ---
-# Recherche du logo local, sinon icône par défaut
 PAGE_ICON = "logo_agora.png" if os.path.exists("logo_agora.png") else "🏢"
 
 st.set_page_config(
@@ -127,15 +126,12 @@ st.markdown(f"""
         border: none;
     }}
 
-    /* CHAT */
+    /* CHAT (style générique, sans cibler les rôles) */
     [data-testid="stChatMessage"] {{
         padding: 1rem;
         border-radius: 12px;
         margin-bottom: 0.5rem;
     }}
-    [data-testid="stChatMessage"][data-testid="assistant"] {{background-color: #FFFFFF; border: 1px solid #E0E0E0;}}
-    [data-testid="stChatMessage"][data-testid="user"] {{background-color: #E3F2FD; border: none;}}
-    [data-testid="stChatMessageAvatar"] img {{border-radius: 50%; object-fit: cover;}}
 
     .fixed-footer {{
         position: fixed;
@@ -156,6 +152,9 @@ def get_api_keys_list():
     return []
 
 def query_groq_with_rotation(messages):
+    """
+    Retourne (texte, modele) ou (None, 'ERREUR CONFIG' / 'SATURATION')
+    """
     available_keys = get_api_keys_list()
     if not available_keys:
         return None, "ERREUR CONFIG"
@@ -171,9 +170,9 @@ def query_groq_with_rotation(messages):
                         messages=messages, model=model, temperature=0.3, max_tokens=1024
                     )
                     return chat.choices[0].message.content, model
-                except:
+                except Exception:
                     continue
-        except:
+        except Exception:
             continue
     return None, "SATURATION"
 
@@ -246,7 +245,7 @@ AIDES_DOSSIERS = {
 📎 Productions possibles
 - Tableau “Poste / Constats / Propositions”.
 - Mail au responsable des services généraux.
-- Note interne de synthèse présentant les améliororations à prévoir.
+- Note interne de synthèse présentant les améliorations à prévoir.
 """,
 
     "2 Organiser l'environnement numérique d'un service": """
@@ -604,7 +603,9 @@ def lancer_mission(prenom):
 
     msgs = [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}]
     with st.spinner("Chargement du dossier..."):
-        resp, _ = query_groq_with_rotation(msgs)
+        resp, status = query_groq_with_rotation(msgs)
+        if resp is None:
+            resp = "⚠️ L'agent n'est pas disponible pour le moment (problème de configuration ou saturation). Préviens ton professeur."
         st.session_state.messages.append({"role": "assistant", "content": resp})
     add_notification(f"Dossier lancé : {dossier}")
 
@@ -642,7 +643,10 @@ def generer_bilan_ccf(student_name, dossier):
 
     msgs = [{"role": "system", "content": "Tu es un Inspecteur IEN neutre et bienveillant."},
             {"role": "user", "content": prompt_bilan}]
-    return query_groq_with_rotation(msgs)[0]
+    resp, status = query_groq_with_rotation(msgs)
+    if resp is None:
+        resp = "⚠️ Impossible de générer le bilan pour le moment (problème de configuration ou saturation de l'IA)."
+    return resp
 
 # --- 11. INTERFACE GRAPHIQUE ---
 
@@ -664,6 +668,11 @@ with st.sidebar:
     st.progress(min(st.session_state.xp / 1000, 1.0))
     st.caption(f"XP : {st.session_state.xp}")
 
+    # Journal de bord / notifications
+    with st.expander("📝 Journal de bord"):
+        for note in st.session_state.notifications[:10]:
+            st.caption(note)
+
     student_name = st.text_input("Prénom", placeholder="Ex: Camille")
 
     st.subheader("📂 Dossiers")
@@ -681,32 +690,53 @@ with st.sidebar:
         update_xp(10)
         st.rerun()
 
-    # OUTILS
+    # OUTILS - Rendu Word
     st.markdown("---")
-    uploaded_file = st.file_uploader("Rendre un travail (Word)", type=['docx'])
+    uploaded_file = st.file_uploader("Rendre un travail (Word)", type=['docx'], key="word_uploader")
     if uploaded_file and student_name:
-        if st.button("Envoyer"):
+        if st.button("Envoyer", key="btn_envoyer_word"):
             txt = extract_text_from_docx(uploaded_file)
             st.session_state.messages.append({"role": "user", "content": f"PROPOSITION : {txt}"})
             update_xp(20)
+            add_notification(f"Document Word remis par {student_name}")
             st.rerun()
+
+    # OUTILS - Charger une sauvegarde CSV
+    st.markdown("---")
+    csv_upload = st.file_uploader("Charger une sauvegarde (CSV)", type=['csv'], key="csv_loader")
+    if csv_upload is not None:
+        if st.button("Importer la sauvegarde", key="btn_import_csv"):
+            try:
+                df_chat = pd.read_csv(csv_upload)
+                if {"role", "content"}.issubset(df_chat.columns):
+                    st.session_state.messages = df_chat[["role", "content"]].to_dict(orient="records")
+                    add_notification("Sauvegarde CSV importée.")
+                    st.success("Conversation rechargée depuis le fichier CSV.")
+                    st.rerun()
+                else:
+                    st.error("Le fichier CSV ne contient pas les colonnes 'role' et 'content'.")
+            except Exception as e:
+                st.error(f"Erreur lors de la lecture du CSV : {e}")
 
     # BILAN
     st.markdown("---")
     if st.button("📝 Générer Bilan CCF"):
-        if len(st.session_state.messages) > 2:
+        if not student_name:
+            st.warning("Prénom requis pour générer le bilan.")
+        elif len(st.session_state.messages) <= 2:
+            st.warning("Travaillez d'abord avec l'agent avant de générer un bilan.")
+        else:
             with st.spinner("Rédaction du Bilan Officiel..."):
                 bilan = generer_bilan_ccf(student_name, st.session_state.dossier)
                 st.session_state.bilan_ready = bilan
+                add_notification(f"Bilan CCF généré pour {student_name}")
             st.rerun()
-        else:
-            st.warning("Travaillez d'abord !")
 
     if st.session_state.bilan_ready:
         st.download_button(
             label="📥 Télécharger Fiche Bilan",
             data=st.session_state.bilan_ready,
-            file_name=f"Bilan_CCF_{student_name}.txt",
+            file_name=f"Bilan_CCF_{student_name if student_name else 'Eleve'}.txt",
             mime="text/plain"
         )
 
@@ -718,12 +748,13 @@ with st.sidebar:
         csv_data = chat_df.to_csv(index=False).encode('utf-8')
         btn_state = False
 
-    st.download_button("💾 Sauvegarder", csv_data, "agora_save.csv", "text/csv", disabled=btn_state)
+    st.download_button("💾 Sauvegarder la conversation", csv_data, "agora_save.csv", "text/csv", disabled=btn_state)
 
     if st.button("🗑️ Reset"):
         st.session_state.messages = [{"role": "assistant", "content": INITIAL_MESSAGE}]
         st.session_state.pgi_data = None
         st.session_state.bilan_ready = None
+        add_notification("Réinitialisation de la session.")
         st.rerun()
 
 # --- HEADER ---
@@ -787,7 +818,7 @@ for i, msg in enumerate(st.session_state.messages):
                     buf = BytesIO()
                     tts.write_to_fp(buf)
                     st.audio(buf, format="audio/mp3", start_time=0)
-                except:
+                except Exception:
                     pass
 
 st.markdown("<br><br>", unsafe_allow_html=True)
@@ -800,31 +831,37 @@ if user_input := st.chat_input("Votre réponse..."):
         st.toast("Identifiez-vous !", icon="👤")
     else:
         st.session_state.messages.append({"role": "user", "content": user_input})
+        add_notification(f"Réponse élève : {student_name}")
         st.rerun()
 
-if st.session_state.messages[-1]["role"] == "user":
+if st.session_state.messages and st.session_state.messages[-1]["role"] == "user":
     with st.chat_message("assistant", avatar=BOT_AVATAR):
         with st.spinner("Analyse..."):
-            # Construction du prompt avec les données PGI injectées
             sys = SYSTEM_PROMPT
             pgi_str = ""
             if st.session_state.pgi_data is not None:
                 pgi_str = st.session_state.pgi_data.to_string()
 
-            # On donne l'historique récent + le PGI à l'IA
+            aide_dossier = AIDES_DOSSIERS.get(st.session_state.dossier, "")
+
             prompt_tour = f"""
             DONNÉES PGI (PREUVE) : {pgi_str}
             RÉPONSE ÉLÈVE : "{user_input}"
             MISSION : {st.session_state.dossier}
 
+            RÉFÉRENCE PÉDAGOGIQUE (à utiliser comme ligne directrice, sans la restituer telle quelle) :
+            {aide_dossier}
+
             CONSIGNE :
             1. Vérifie si l'élève utilise bien le PGI.
-            2. Si oui, valide et demande la production suivante.
-            3. Si non, corrige-le.
+            2. Si oui, valide et demande la production suivante (mail, tableau, note...).
+            3. Si non, corrige-le et redirige-le vers les données utiles.
             """
 
             msgs = [{"role": "system", "content": sys}, {"role": "user", "content": prompt_tour}]
-            resp, _ = query_groq_with_rotation(msgs)
-
+            resp, status = query_groq_with_rotation(msgs)
+            if resp is None:
+                resp = "⚠️ L'agent ne peut pas analyser ta réponse pour le moment. Préviens ton professeur."
             st.markdown(resp)
             st.session_state.messages.append({"role": "assistant", "content": resp})
+            add_notification("Réponse de l'agent générée.")
