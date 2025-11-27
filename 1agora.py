@@ -248,78 +248,273 @@ def add_notification(msg: str):
     ts = datetime.now().strftime("%H:%M")
     st.session_state.notifications.insert(0, f"{ts} - {msg}")
 
-# --- 8. SOMMAIRE OFFICIEL (simplifié ici, déjà aligné) ---
+# --- 8. SOMMAIRE OFFICIEL (aligné manuel Foucher) ---
 
 DB_OFFICIELLE = {
     "La gestion opérationnelle des espaces de travail": {
         "Dossier 1 – Organiser le fonctionnement des espaces de travail":
-            "Modes de travail, aménagement open space, matériel, PGI.",
+            "Écoactif Solidaire : réorganisation des locaux, prise en compte des nouveaux modes de travail et des équipements nécessaires.",
         "Dossier 2 – Organiser l’environnement numérique d’un service":
-            "Réseaux, ENT, cloud, RGPD, plan de déploiement numérique.",
+            "Écoactif Solidaire : réseaux, outils numériques et environnement pour les comptables (coworking + télétravail).",
         "Dossier 3 – Gérer les ressources partagées de l’organisation":
-            "Stocks, fournitures, salles, véhicules, outils de réservation.",
+            "Écoactif Solidaire : fournitures, salles, matériels partagés, procédures et bases de données.",
         "Dossier 4 – Organiser le partage de l’information":
-            "Diagnostic de la communication interne et déploiement d’un outil collaboratif."
+            "Écoactif Solidaire : communication interne jugée insuffisante, adoption d’un outil collaboratif."
     },
     "Le traitement de formalités administratives liées aux relations avec les partenaires": {
         "Dossier 5 – Participer au lancement d’une nouvelle gamme":
-            "Planigramme, négociation fournisseur, communication multicanale.",
+            "Océaform : lancement d’une nouvelle gamme de soins, plan du lancement et communication.",
         "Dossier 6 – Organiser et suivre des réunions":
-            "Réunions de service, visioconférences, comptes rendus.",
+            "Océaform : réunions de service et visioconférences liées au lancement et au suivi de l’activité.",
         "Dossier 7 – Organiser un déplacement":
-            "Organisation pratique du déplacement et formalités."
+            "Océaform : déplacement professionnel (fournisseur / voyage d’affaires), transport, hébergement, formalités."
     },
     "Le suivi administratif des relations avec le personnel": {
         "Dossier 8 – Participer au recrutement du personnel":
-            "Préparation du recrutement, tri et sélection des candidatures.",
+            "Léa Nature : recrutement d’un(e) commercial(e) beauté/hygiène bio, profil de poste, sélection.",
         "Dossier 9 – Participer à l’intégration du personnel":
-            "Accueil, parcours d’intégration, cohésion.",
+            "Léa Nature : accueil du nouveau salarié, parcours d’intégration, motivation et cohésion.",
         "Dossier 10 – Actualiser les dossiers du personnel":
-            "Contrats, avenants, complétude des dossiers."
+            "Léa Nature : contrats, registre du personnel, avenants et complétude des dossiers."
     }
 }
 
-# --- 8 bis. AIDES DOSSIERS (raccourcies) ---
+# --- 9. FICHES D’AIDE (résumé très court des situations) ---
 
 AIDES_DOSSIERS = {
-    "Dossier 7 – Organiser un déplacement": {
-        "situation": "L’entreprise organise le déplacement de plusieurs salariés pour un salon ou une formation.",
-        "contexte": "Il faut choisir le transport et l’hébergement, respecter un budget et les règles internes.",
+    "Dossier 1 – Organiser le fonctionnement des espaces de travail": {
+        "situation": "Association Écoactif Solidaire qui internalise une partie de sa comptabilité.",
+        "contexte": "Réorganisation des services généraux, embauche de deux comptables, nouveaux modes de travail.",
         "missions": [
-            "Comparer plusieurs solutions de transport / hébergement.",
-            "Préparer les réservations et vérifier les horaires.",
-            "Préparer un récapitulatif clair pour le salarié."
+            "Présenter les modes de travail (télétravail, coworking, open space…) avec avantages et limites.",
+            "Proposer une organisation des espaces adaptée au nouveau service comptable.",
+            "Lister et justifier les équipements matériels à prévoir pour les postes de travail."
         ],
-        "types_production": "Tableau comparatif (critères), feuille de route, mail de confirmation."
+        "types_production": "Tableau comparatif, note de synthèse, schéma d’aménagement, liste argumentée."
     },
-    # (les autres dossiers peuvent rester comme dans ta version précédente ; je garde l’exemple clé ici)
+    "Dossier 2 – Organiser l’environnement numérique d’un service": {
+        "situation": "Toujours Écoactif Solidaire, suite du projet comptabilité.",
+        "contexte": "Les deux comptables travaillent en open space et à distance, l’environnement numérique doit être revu.",
+        "missions": [
+            "Distinguer les différents réseaux et accès (internet, intranet, extranet, ENT).",
+            "Proposer un environnement numérique complet pour les comptables.",
+            "Planifier les étapes de mise en place (achat, installation, formation, sauvegardes)."
+        ],
+        "types_production": "Tableau des outils, plan d’actions, schéma des flux numériques."
+    },
+    "Dossier 3 – Gérer les ressources partagées de l’organisation": {
+        "situation": "Écoactif Solidaire adopte l’open space et partage davantage de ressources.",
+        "contexte": "Fournitures, salles de réunion, véhicules, matériels doivent être mieux gérés.",
+        "missions": [
+            "Analyser la situation actuelle de partage des ressources.",
+            "Proposer une nouvelle organisation (stock, réservations, règles d’usage).",
+            "Mettre en forme un outil de suivi ou de réservation (tableur ou base)."
+        ],
+        "types_production": "Tableau d’inventaire, formulaire de réservation, procédure interne."
+    },
+    "Dossier 4 – Organiser le partage de l’information": {
+        "situation": "Communication interne jugée peu collaborative à Écoactif Solidaire.",
+        "contexte": "Nouveaux modes de travail ⇒ besoin d’un meilleur partage d’information.",
+        "missions": [
+            "Diagnostiquer les supports actuels de communication interne.",
+            "Proposer une nouvelle stratégie plus collaborative.",
+            "Paramétrer ou décrire un espace d’outil collaboratif (équipes, canaux, droits)."
+        ],
+        "types_production": "Diagnostic, plan de communication, maquette d’espace collaboratif."
+    },
+    "Dossier 5 – Participer au lancement d’une nouvelle gamme": {
+        "situation": "Océaform lance une nouvelle gamme de produits.",
+        "contexte": "Croissance de la gamme, besoin de communication et d’organisation du lancement.",
+        "missions": [
+            "Construire le plan du lancement (actions avant/pendant/après).",
+            "Préparer des supports de communication (affiche, mail, réseaux).",
+            "Organiser la coordination avec les fournisseurs et l’équipe commerciale."
+        ],
+        "types_production": "Planigramme, tableaux de suivi, mails ou documents de communication."
+    },
+    "Dossier 6 – Organiser et suivre des réunions": {
+        "situation": "Océaform multiplie les réunions autour du projet et du suivi.",
+        "contexte": "Réunions de service en présentiel et visioconférences avec partenaires.",
+        "missions": [
+            "Préparer une réunion (ordre du jour, convocations, logistique).",
+            "Suivre la réunion (présences, décisions, actions à mener).",
+            "Organiser une visioconférence (lien, tests, compte rendu)."
+        ],
+        "types_production": "Convocation, ordre du jour, compte rendu, tableau de suivi des décisions."
+    },
+    "Dossier 7 – Organiser un déplacement": {
+        "situation": "Océaform organise un déplacement chez un fournisseur et un voyage d’affaires.",
+        "contexte": "Comparaison des moyens de transport et des hébergements, respect contraintes temps/budget.",
+        "missions": [
+            "Identifier les contraintes du déplacement (temps, budget, géographie).",
+            "Comparer plusieurs options de transport et d’hébergement.",
+            "Préparer le dossier de déplacement et les formalités administratives."
+        ],
+        "types_production": "Tableau comparatif, ordre de mission, check-list des formalités."
+    },
+    "Dossier 8 – Participer au recrutement du personnel": {
+        "situation": "Entreprise Léa Nature, service RH.",
+        "contexte": "Recrutement d’un(e) commercial(e) sédentaire pour la gamme beauté/hygiène bio.",
+        "missions": [
+            "Identifier les étapes du processus de recrutement.",
+            "Compléter le profil de poste à partir d’informations données.",
+            "Préparer un mail ou document de convocation à un entretien."
+        ],
+        "types_production": "Profil de poste, tableau de présélection, mail de convocation."
+    },
+    "Dossier 9 – Participer à l’intégration du personnel": {
+        "situation": "Léa Nature accueille le nouveau commercial recruté.",
+        "contexte": "Importance de l’onboarding, de la cohésion et des conditions de travail.",
+        "missions": [
+            "Construire un parcours d’accueil sur plusieurs jours.",
+            "Lister les actions pour intégrer le salarié dans l’équipe.",
+            "Proposer des actions pour la motivation et la cohésion."
+        ],
+        "types_production": "Planning d’intégration, fiche d’accueil, note de service ou mail interne."
+    },
+    "Dossier 10 – Actualiser les dossiers du personnel": {
+        "situation": "Toujours Léa Nature, service RH.",
+        "contexte": "Contrat de travail, registre du personnel, avenants, pièces justificatives.",
+        "missions": [
+            "Vérifier la complétude d’un dossier salarié.",
+            "Mettre à jour les informations dans un tableau ou registre.",
+            "Préparer un document simple (contrat ou avenant prérempli, mail de relance)."
+        ],
+        "types_production": "Tableau de suivi, extrait de registre, mail administratif."
+    }
 }
 
-# --- 9. GÉNÉRATEUR PGI (exemple identique à ta version précédente, pas modifié ici sauf noms) ---
+# --- 10. GÉNÉRATEUR PGI PAR DOSSIER (données fictives mais cohérentes) ---
 
 def generate_fake_pgi_data(dossier_name: str) -> pd.DataFrame:
     rows = []
 
-    if "Dossier 7" in dossier_name:
+    # --- PARTIE 1 ---
+
+    if "Dossier 1" in dossier_name:
+        postes = ["Accueil", "Comptabilité", "Direction", "Open space", "Salle de réunion"]
+        for p in postes:
+            rows.append({
+                "Zone": p,
+                "Nombre de postes": random.randint(1, 6),
+                "État": random.choice(["Adapté", "Saturé", "Sous-utilisé"]),
+                "Problème signalé": random.choice(
+                    ["Bruit", "Manque de rangements", "Éclairage insuffisant", "Aucun"]
+                ),
+                "Priorité": random.choice(["Haute", "Moyenne", "Basse"])
+            })
+
+    elif "Dossier 2" in dossier_name:
+        outils = ["Suite bureautique", "PGI comptable", "Messagerie", "Drive partagé", "Outil de visio"]
+        for o in outils:
+            rows.append({
+                "Outil": o,
+                "Service concerné": random.choice(["Comptabilité", "Accueil", "Direction"]),
+                "Nb utilisateurs": random.randint(2, 15),
+                "Problème": random.choice(["Aucun", "Droits insuffisants", "Connexion lente", "Formation à prévoir"]),
+                "Priorité": random.choice(["Urgent", "À planifier", "Information"])
+            })
+
+    elif "Dossier 3" in dossier_name:
+        ressources = ["Salle réunion A", "Salle réunion B", "Véhicule 1", "Véhicule 2", "Vidéoprojecteur"]
+        for r in ressources:
+            rows.append({
+                "Ressource": r,
+                "Type": random.choice(["Salle", "Véhicule", "Matériel"]),
+                "Taux d'utilisation": f"{random.randint(40, 100)} %",
+                "Conflits réserv.": random.randint(0, 5),
+                "Remarque": random.choice(["Souvent réservé", "Peu utilisé", "Réservation à structurer"])
+            })
+
+    elif "Dossier 4" in dossier_name:
+        infos = ["Consignes sécurité", "Planning mensuel", "Notes de service", "Procédure d’accueil"]
+        for i in infos:
+            rows.append({
+                "Information": i,
+                "Support actuel": random.choice(["Mail", "Affichage", "Intranet", "Oral uniquement"]),
+                "Public cible": random.choice(["Tous les salariés", "Service compta", "Direction"]),
+                "Fréquence": random.choice(["Ponctuelle", "Hebdomadaire", "Mensuelle"]),
+                "Problème": random.choice(["Non à jour", "Non lu", "Trop dispersé", "Aucun"])
+            })
+
+    # --- PARTIE 2 ---
+
+    elif "Dossier 5" in dossier_name:
+        actions = ["Teasing réseaux sociaux", "Animation point de vente", "Newsletter clients fidèles", "Formation vendeurs"]
+        for a in actions:
+            rows.append({
+                "Action": a,
+                "Responsable": random.choice(PRENOMS),
+                "Échéance": f"{random.randint(1, 28)}/09/2025",
+                "Statut": random.choice(["À faire", "En cours", "Terminé"]),
+                "Budget estimé": f"{random.randint(200, 2000)} €"
+            })
+
+    elif "Dossier 6" in dossier_name:
+        for i in range(4):
+            rows.append({
+                "Réunion": f"Réunion {i+1}",
+                "Objet": random.choice(["Préparation lancement", "Point qualité", "Réunion RH", "Sécurité"]),
+                "Date": f"{random.randint(1, 28)}/10/2025",
+                "Participants prévus": random.randint(3, 12),
+                "Compte rendu": random.choice(["Non rédigé", "En cours", "Diffusé"])
+            })
+
+    elif "Dossier 7" in dossier_name:
+        villes = ["Pegalajar", "Séville", "Madrid", "Barcelone"]
         for _ in range(5):
             rows.append({
                 "Salarié": f"{random.choice(PRENOMS)} {random.choice(NOMS)}",
-                "Ville": random.choice(["Paris", "Lyon", "Marseille", "Bordeaux"]),
-                "Transport": random.choice(["Train", "Avion", "Voiture"]),
-                "Hébergement": random.choice(["Hôtel", "Airbnb", "Chez partenaire"]),
-                "Coût estimé": f"{random.randint(150, 600)} €",
-                "Statut": "À comparer"
+                "Destination": random.choice(villes),
+                "Motif": random.choice(["Visite oliveraie", "Visite usine", "Rencontre fournisseur", "Découverte culturelle"]),
+                "Transport": random.choice(["Voiture entreprise", "Train", "Avion"]),
+                "Hébergement": random.choice(["Hôtel", "Maison d’hôtes", "Appartement loué"]),
+                "Coût estimé": f"{random.randint(180, 650)} €"
             })
-    else:
-        # simple fallback pour les autres dossiers (à reprendre de ta version précédente)
-        for _ in range(5):
+
+    # --- PARTIE 3 ---
+
+    elif "Dossier 8" in dossier_name:
+        postes = ["Commercial sédentaire", "Assistant commercial", "Chargé de clientèle"]
+        diplomes = ["Bac Pro AGOrA", "Bac STMG", "BTS NDRC", "BTS MCO"]
+        for _ in range(8):
             rows.append({
-                "Info": "Données fictives à définir pour ce dossier."
+                "Candidat": f"{random.choice(PRENOMS)} {random.choice(NOMS)}",
+                "Poste visé": random.choice(postes),
+                "Diplôme principal": random.choice(diplomes),
+                "Expérience": f"{random.randint(0, 5)} an(s)",
+                "Motivation /5": random.randint(1, 5),
+                "Statut dossier": random.choice(["À étudier", "Retenu entretien", "Refusé"])
             })
+
+    elif "Dossier 9" in dossier_name:
+        etapes = ["Préparation poste", "Création comptes informatiques", "Remise badge", "Présentation équipe", "Formation sécurité"]
+        for e in etapes:
+            rows.append({
+                "Étape d’intégration": e,
+                "Responsable": random.choice(["RH", "Manager", "Accueil"]),
+                "Moment": random.choice(["Avant arrivée", "Jour J", "Semaine 1"]),
+                "Statut": random.choice(["À faire", "En cours", "Terminé"]),
+                "Commentaire": random.choice(["Prioritaire", "Peut être délégué", "À vérifier"])
+            })
+
+    elif "Dossier 10" in dossier_name:
+        for _ in range(6):
+            rows.append({
+                "Salarié": f"{random.choice(PRENOMS)} {random.choice(NOMS)}",
+                "Type modif.": random.choice(["Adresse", "Contrat", "Fonction"]),
+                "Document reçu": random.choice(["Oui", "Non"]),
+                "Dossier à jour": random.choice(["Oui", "Non"]),
+                "Action à mener": random.choice(["Relancer salarié", "Archiver", "Mettre à jour PGI"])
+            })
+
+    else:
+        for _ in range(5):
+            rows.append({"Info": "Données fictives à définir pour ce dossier."})
 
     return pd.DataFrame(rows)
 
-# --- 10. PROFIL ÉLÈVE & PROMPTS IA ---
+# --- 11. DIFFÉRENCIATION ÉLÈVES & PROMPTS IA ---
 
 def build_differentiation_instruction(profil: str) -> str:
     if profil == "Accompagnement renforcé":
@@ -328,52 +523,53 @@ NIVEAU ÉLÈVE : Besoin d'aide important.
 - Utilise des phrases très simples.
 - Découpe la tâche en petites étapes numérotées (1, 2, 3...).
 - Donne un exemple très court si nécessaire.
-- Propose régulièrement de reformuler.
+- Propose de reformuler si ce n'est pas clair.
 """
     elif profil == "Autonome":
         return """
 NIVEAU ÉLÈVE : Autonome.
-- Contextualise rapidement.
+- Rappelle rapidement le contexte.
 - Donne des consignes plus ouvertes.
-- Laisse l’élève proposer ses propres choix (tu valideras ensuite).
+- Laisse l’élève proposer ses propres choix, puis valide ou ajuste.
 """
     else:  # Standard
         return """
 NIVEAU ÉLÈVE : Standard.
-- Donne une consigne claire et une ou deux étapes clés.
-- Tu peux proposer un exemple de structure sans remplir tout le contenu.
+- Donne une consigne claire.
+- Ajoute une ou deux étapes clés sous forme de puces.
+- Tu peux donner un exemple de structure sans tout remplir.
 """
 
 SYSTEM_PROMPT = """
-RÔLE : Tu es le Tuteur de stage et Evaluateur CCF (Bac Pro AGOrA).
+RÔLE : Tu es le Tuteur de stage et évaluateur CCF (Bac Pro AGOrA).
 TON : Professionnel, bienveillant, directif.
 
 OBJECTIF :
-- Faire réaliser à l'élève une TÂCHE ADMINISTRATIVE liée au DOSSIER choisi.
-- L'aider à produire un document métier (mail, note, tableau de synthèse, compte rendu...).
+- Faire réaliser à l'élève une tâche administrative liée au dossier choisi.
+- L’aider à produire un document métier (mail, note, tableau de synthèse, compte rendu, etc.).
 
-RÈGLES DE PRÉSENTATION :
-- Quand tu présentes le contexte : 3 à 4 puces maximum, pas de long paragraphe.
-- Quand tu donnes une consigne : une phrase courte + éventuellement une micro-liste d’étapes.
-- Pas de texte compact de plus de 7 lignes d’affilée.
-- Tu peux utiliser des listes à puces pour faciliter la lecture.
+PRÉSENTATION :
+- Contexte en 3 à 4 puces maximum (phrases courtes).
+- Consignes en une phrase courte + éventuellement une micro-liste d’étapes.
+- Pas de bloc de texte compact de plus de 7 lignes.
+- Utilise des listes à puces chaque fois que cela facilite la lecture.
 
-IMPORTANT SUR LES TABLEAUX :
-- Les tableaux fournis dans le PGI sont des DONNÉES BRUTES.
-- Si tu demandes de « faire un tableau », il doit être DIFFÉRENT :
-  - tableau de synthèse,
-  - tableau comparatif,
-  - tableau de plan d’actions ou de suivi.
-- Ne demande jamais de recopier exactement le tableau du PGI.
+TABLEAUX :
+- Les tableaux PGI sont des données brutes.
+- Si tu demandes de « faire un tableau », il doit être :
+  - un tableau de synthèse,
+  - un tableau comparatif,
+  - ou un tableau de plan d’actions / de suivi.
+- Ne demande jamais de recopier le tableau du PGI.
 """
 
 INITIAL_MESSAGE = """
 👋 **Bienvenue dans Agence Pro'AGOrA**
 
-1. Choisis ta **Partie** et ton **Dossier** dans la barre de gauche.  
+1. Choisis la **Partie** et le **Dossier** dans la barre de gauche.  
 2. Sélectionne ton **Profil d’élève**.  
 3. Clique sur **LANCER LA MISSION**.  
-4. Lis le tableau (PGI) et la fiche d’aide si elle est proposée, puis réponds dans le chat.
+4. Lis le tableau (PGI) et la fiche d’aide si elle est affichée, puis réponds dans le chat.
 """
 
 if not st.session_state.messages:
@@ -397,11 +593,11 @@ def lancer_mission(prenom: str, profil: str):
     aide_txt = ""
     if aide:
         aide_txt = f"""
-RAPPEL DU CONTEXTE D'EXERCICE (extrait enseignant) :
+RÉSUMÉ ENSEIGNANT (contexte dossier) :
 - Situation : {aide['situation']}
 - Contexte : {aide['contexte']}
 - Missions possibles : {", ".join(aide['missions'])}
-- Types de productions : {aide['types_production']}
+- Productions habituelles : {aide['types_production']}
 """
 
     prompt = f"""
@@ -412,18 +608,18 @@ PARTIE : {theme}
 
 {aide_txt}
 
-LIEU FICTIF : {lieu} situé à {ville}.
-ÉLÈVE : {prenom} (Bac Pro AGOrA).
+LIEU FICTIF : {lieu} à {ville}.
+ÉLÈVE : {prenom} (Première Bac Pro AGOrA).
 COMPÉTENCE VISÉE : {competence}
 
 DONNÉES PGI (fictives à utiliser comme base) :
 {pgi_txt}
 
-ACTION ATTENDUE DE TA PART :
+ACTION ATTENDUE :
 1. Présente le contexte en 3 à 4 puces maximum.
 2. Explique la mission à l'élève en 1 ou 2 phrases courtes.
-3. Donne une première consigne claire qui demande une PRODUCTION (mail, tableau de synthèse, note, compte rendu...).
-4. Si tu demandes un tableau, impose qu'il s'agisse d'un tableau de synthèse ou comparatif, différent du PGI.
+3. Donne une première consigne claire demandant une PRODUCTION (mail, tableau de synthèse/comparatif, note, compte rendu…).
+4. Si tu demandes un tableau, précise qu’il doit être différent du PGI (tableau de synthèse ou comparatif).
 """
 
     msgs = [{"role": "system", "content": SYSTEM_PROMPT},
@@ -445,10 +641,10 @@ Tu es Inspecteur de l'Éducation nationale, jury CCF Bac Pro AGOrA.
 Élève : {student_name}
 Dossier travaillé : {dossier}
 
-TRANSCRIPTION DE LA SÉANCE (dialogue tuteur / élève) :
+TRANSCRIPTION (dialogue tuteur / élève) :
 {full_text}
 
-Produis un bilan clair et structuré pour le professeur :
+Produis un bilan structuré pour le professeur :
 
 1. Contexte professionnel (structure + mission).
 2. Activités réalisées par l'élève.
@@ -456,10 +652,10 @@ Produis un bilan clair et structuré pour le professeur :
    - Communication écrite,
    - Usage des outils numériques (PGI / Word / Excel),
    - Respect des procédures administratives.
-   (Niveaux : NOVICE / FONCTIONNEL / MAÎTRISE)
-4. Appréciation globale en 2 à 3 phrases.
+   Niveaux possibles : NOVICE / FONCTIONNEL / MAÎTRISE.
+4. Appréciation globale (2 ou 3 phrases à la 3e personne).
 
-Style : phrases courtes, directement exploitables dans un dossier CCF.
+Phrases courtes, style directement exploitable dans un dossier CCF.
 """
 
     msgs = [
@@ -469,7 +665,7 @@ Style : phrases courtes, directement exploitables dans un dossier CCF.
     bilan, _ = query_groq_with_rotation(msgs)
     return bilan or "Impossible de générer le bilan (problème d'IA)."
 
-# --- 11. INTERFACE GRAPHIQUE ---
+# --- 12. INTERFACE GRAPHIQUE ---
 
 LOGO_LYCEE = "logo_lycee.png"
 LOGO_AGORA = "logo_agora.png"
@@ -496,7 +692,7 @@ with st.sidebar:
     )
     st.session_state.profil_eleve = profil_eleve
 
-    st.subheader("📂 Sommaire (Foucher)")
+    st.subheader("📂 Sommaire (manuel Foucher)")
     st.session_state.theme = st.selectbox(
         "Partie du manuel",
         list(DB_OFFICIELLE.keys())
@@ -626,7 +822,7 @@ with c1:
 
 with c2:
     with st.popover("ℹ️ Aide Métier"):
-        st.info("Appuie-toi sur le manuel, les cours et les sites officiels (service-public.fr, ameli.fr...).")
+        st.info("Appuie-toi sur ton manuel, tes cours et les sites officiels (service-public.fr, ameli.fr...).")
 
 with c3:
     with st.popover("❓ Aide Outil"):
@@ -688,7 +884,7 @@ for i, msg in enumerate(st.session_state.messages):
 st.markdown("<br><br>", unsafe_allow_html=True)
 
 st.markdown(
-    '<div class="fixed-footer">Agence Pro\'AGOrA - Données 100 % fictives</div>',
+    '<div class="fixed-footer">Agence Pro\'AGOrA - Données 100 % fictives (structures inspirées du manuel, sans reproduction intégrale)</div>',
     unsafe_allow_html=True,
 )
 
@@ -728,7 +924,7 @@ CONSigne :
 2. Si c'est pertinent, valide un point précis, explique pourquoi c'est bien, puis propose la prochaine étape.
 3. Si c'est incomplet ou hors sujet, explique ce qui manque en phrases courtes et donne une consigne guidée.
 4. Si tu proposes un tableau, rappelle clairement qu'il s'agit d'un tableau de synthèse/comparatif différent du PGI.
-5. Réponds sous forme de blocs courts et/ou listes à puces (pas de gros pavé).
+5. Réponds avec des blocs courts et/ou listes à puces (pas de gros pavé).
 """
 
             msgs = [
