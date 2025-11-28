@@ -25,7 +25,7 @@ except ImportError:
 PAGE_ICON = "logo_agora.png" if os.path.exists("logo_agora.png") else "🏢"
 
 st.set_page_config(
-    page_title="Agence Pro'AGOrA (Inclusif)",
+    page_title="Agence Pro'AGOrA",
     page_icon=PAGE_ICON,
     layout="wide",
     initial_sidebar_state="auto"
@@ -36,6 +36,8 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 if "notifications" not in st.session_state:
     st.session_state.notifications = ["Système prêt."]
+if "current_context_doc" not in st.session_state:
+    st.session_state.current_context_doc = None
 if "pgi_data" not in st.session_state:
     st.session_state.pgi_data = None
 if "bilan_ready" not in st.session_state:
@@ -70,6 +72,7 @@ def update_xp(amount: int):
         st.toast(f"+{amount} XP", icon="⭐")
 
 # --- 3. VARIABLES DE CONTEXTE ---
+
 VILLES_FRANCE = [
     "Lyon", "Bordeaux", "Lille", "Nantes", "Strasbourg",
     "Toulouse", "Marseille", "Nice", "Rennes", "Dijon",
@@ -96,28 +99,6 @@ PRENOMS = [
     "Naomi", "Omar", "Sofia", "Jules", "Fatou"
 ]
 
-# --- [CUA PILIER 3] GLOSSAIRE MÉTIER ---
-GLOSSAIRE = {
-    "PGI": "Progiciel de Gestion Intégré. Logiciel unique qui gère tout (Ventes, Stocks, Compta).",
-    "Open Space": "Espace de travail ouvert sans cloisons, favorisant la communication mais bruyant.",
-    "Coworking": "Espace de travail partagé loué par des travailleurs indépendants ou des entreprises.",
-    "Processus": "Suite logique d'étapes pour réaliser une tâche administrative.",
-    "B to B": "Business to Business. Relations commerciales entre deux entreprises.",
-    "Devis": "Document proposant un prix pour un service ou un produit avant l'achat.",
-    "Facture": "Document comptable prouvant un achat et demandant le paiement.",
-    "Marge": "Différence entre le prix de vente et le coût de revient (le bénéfice brut).",
-    "Télétravail": "Organisation du travail permettant d'exercer son activité hors des locaux de l'entreprise.",
-    "CCF": "Contrôle en Cours de Formation. Évaluation réalisée par tes professeurs pour le Bac.",
-    "Organigramme": "Schéma qui représente la structure hiérarchique (les chefs et les services) d'une entreprise."
-}
-
-# --- [CUA PILIER 2] MODÈLES (TEMPLATES) ---
-TEMPLATES_CUA = {
-    "Mail formel": "Objet : ...\n\nMadame, Monsieur,\n\nJe me permets de vous contacter concernant [SUJET].\n\nEn effet, [EXPLIQUEZ LA SITUATION].\n\nDans l'attente de votre retour, je vous prie d'agréer...\n\nSignature",
-    "Compte rendu": "DATE : ...\nPRÉSENTS : ...\n\nOBJET DE LA RÉUNION :\n1. ...\n2. ...\n\nDÉCISIONS PRISES :\n- ...\n- ...",
-    "Note de service": "DESTINATAIRE : Tout le personnel\nEXPÉDITEUR : La Direction\nDATE : ...\n\nOBJET : ...\n\nIl est porté à la connaissance du personnel que..."
-}
-
 # --- 4. OUTILS IMAGE ---
 def img_to_base64(img_path: str) -> str:
     if os.path.exists(img_path):
@@ -125,68 +106,62 @@ def img_to_base64(img_path: str) -> str:
             return base64.b64encode(f.read()).decode()
     return ""
 
-# --- 5. STYLE & CSS [CUA PILIER 1 : REPRÉSENTATION] ---
+# --- 5. STYLE & CSS ---
+is_dys = st.session_state.get("mode_dys", False)
+font_family = "'Verdana', sans-serif" if is_dys else "'Segoe UI', 'Roboto', Helvetica, Arial, sans-serif"
+font_size = "18px" if is_dys else "16px"
 
-def apply_cua_style(mode_confort: bool):
-    if mode_confort:
-        # Mode CUA : Fond crème, texte sombre (pas noir pur), police accessible, interligne aéré
-        font_family = "'Verdana', 'Arial', sans-serif"
-        line_height = "1.8"
-        word_spacing = "2px"
-        bg_color = "#FFFBF0" # Crème
-        text_color = "#2D2D2D"
-        font_size = "18px"
-    else:
-        # Mode Standard
-        font_family = "'Segoe UI', 'Roboto', Helvetica, Arial, sans-serif"
-        line_height = "1.5"
-        word_spacing = "normal"
-        bg_color = "#FFFFFF"
-        text_color = "#202124"
-        font_size = "16px"
+st.markdown(
+    f"""
+<style>
+    html, body, [class*="css"] {{
+        font-family: {font_family} !important;
+        font-size: {font_size};
+        color: #202124;
+        background-color: #FFFFFF;
+    }}
+    header {{background-color: transparent !important;}}
+    [data-testid="stHeader"] {{
+        background-color: rgba(255, 255, 255, 0.95);
+    }}
+    .reportview-container .main .block-container {{
+        padding-top: 1rem;
+        max-width: 100%;
+    }}
+    .pgi-container {{
+        border: 1px solid #dfe1e5;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 20px;
+        background-color: #f8f9fa;
+    }}
+    .pgi-title {{
+        color: #1a73e8;
+        font-weight: bold;
+        font-size: 14px;
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }}
+    .fixed-footer {{
+        position: fixed;
+        left: 0;
+        bottom: 0;
+        width: 100%;
+        background: #323232;
+        color: #FFF;
+        text-align: center;
+        padding: 6px;
+        font-size: 11px;
+        z-index: 99999;
+    }}
+</style>
+""",
+    unsafe_allow_html=True,
+)
 
-    st.markdown(
-        f"""
-        <style>
-        html, body, [class*="css"] {{
-            font-family: {font_family} !important;
-            font-size: {font_size};
-            color: {text_color};
-            background-color: {bg_color};
-            line-height: {line_height};
-        }}
-        .stMarkdown p, .stMarkdown li {{
-            word-spacing: {word_spacing} !important;
-        }}
-        header {{background-color: transparent !important;}}
-        [data-testid="stHeader"] {{
-            background-color: rgba(255, 255, 255, 0);
-        }}
-        .pgi-container {{
-            border: 1px solid #dfe1e5;
-            border-radius: 8px;
-            padding: 15px;
-            margin-bottom: 20px;
-            background-color: #f8f9fa;
-            color: #000; /* Force le noir pour le tableau PGI */
-        }}
-        .pgi-title {{
-            color: #1a73e8;
-            font-weight: bold;
-            font-size: 14px;
-            margin-bottom: 10px;
-        }}
-        .fixed-footer {{
-            position: fixed; left: 0; bottom: 0; width: 100%;
-            background: #323232; color: #FFF;
-            text-align: center; padding: 6px; font-size: 11px; z-index: 99999;
-        }}
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
-# --- 6. LOGIQUE API GROQ (Modèle Léger Prioritaire) ---
+# --- 6. LOGIQUE API GROQ ---
 
 def get_api_keys_list():
     if "groq_keys" in st.secrets:
@@ -204,7 +179,7 @@ def query_groq_with_rotation(messages):
     keys = list(available_keys)
     random.shuffle(keys)
     
-    # Modèle léger en premier pour éviter les erreurs 429
+    # --- MODIFICATION ICI : On met le modèle léger en premier ---
     models = ["llama3-8b-8192", "mixtral-8x7b-32768", "llama-3.3-70b-versatile"]
 
     for key in keys:
@@ -219,9 +194,11 @@ def query_groq_with_rotation(messages):
                         max_tokens=1024,
                     )
                     return chat.choices[0].message.content, model
-                except Exception:
+                except Exception as e:
+                    # On passe au modèle suivant silencieusement
                     continue
-        except Exception:
+        except Exception as e:
+            st.error(f"Erreur connexion Groq : {e}")
             continue
 
     return None, "SATURATION"
@@ -243,7 +220,9 @@ def extract_text_from_table_file(file) -> str:
             df = pd.read_csv(file)
         else:
             df = pd.read_excel(file)
-        return df.to_string(index=False)[:8000]
+
+        text = df.to_string(index=False)
+        return text[:8000]
     except Exception as e:
         return f"ERREUR LECTURE TABLEUR : {e}"
 
@@ -257,7 +236,7 @@ def add_notification(msg: str):
     ts = datetime.now().strftime("%H:%M")
     st.session_state.notifications.insert(0, f"{ts} - {msg}")
 
-# --- 8. SOMMAIRE OFFICIEL ---
+# --- 8. SOMMAIRE OFFICIEL (aligné manuel) ---
 
 DB_OFFICIELLE = {
     "La gestion opérationnelle des espaces de travail": {
@@ -288,7 +267,8 @@ DB_OFFICIELLE = {
     }
 }
 
-# --- 9. FICHES D’AIDE COMPLÈTES ---
+# --- 9. FICHES D’AIDE ---
+
 AIDES_DOSSIERS = {
     "Dossier 1 – Organiser le fonctionnement des espaces de travail": {
         "situation": "Association Écoactif Solidaire qui internalise une partie de sa comptabilité.",
@@ -316,7 +296,7 @@ AIDES_DOSSIERS = {
         "missions": [
             "Analyser la situation actuelle de partage des ressources.",
             "Proposer une nouvelle organisation (stock, réservations, règles d’usage).",
-            "Mettre en forme un outil de suivi ou de réservation (tableur ou base)."
+            "Mettre en forme un outil de suivi ou de réservation (tableur ou base).",
         ],
         "types_production": "Tableau d’inventaire, formulaire de réservation, procédure interne."
     },
@@ -522,7 +502,7 @@ def generate_fake_pgi_data(dossier_name: str) -> pd.DataFrame:
 
     return pd.DataFrame(rows)
 
-# --- 11. [CUA PILIER 4] PROMPTS IA INCLUSIFS ---
+# --- 11. DIFFÉRENCIATION & PROMPTS IA ---
 
 def build_differentiation_instruction(profil: str) -> str:
     if profil == "Accompagnement renforcé":
@@ -548,32 +528,36 @@ NIVEAU ÉLÈVE : Standard.
 - Tu peux donner un exemple de structure sans tout remplir.
 """
 
-# Prompt CUA restructuré pour l'accessibilité cognitive
 SYSTEM_PROMPT = """
-RÔLE : Tu es un Tuteur de stage bienveillant (Bac Pro AGOrA).
-APPROCHE PÉDAGOGIQUE : Conception Universelle de l'Apprentissage (CUA).
+RÔLE : Tu es le Tuteur de stage et évaluateur CCF (Bac Pro AGOrA).
+TON : Professionnel, bienveillant, directif.
 
-CONSIGNES POUR TES RÉPONSES :
-1. CLARTÉ : Fais des phrases courtes. Un verbe par phrase.
-2. ÉTAYAGE : Si l'élève bloque, ne donne pas la réponse, mais propose :
-   - Un indice.
-   - Ou une reformulation plus simple.
-   - Ou un exemple de structure (sans le contenu).
-3. VALORISATION : Félicite chaque effort, même partiel ("C'est un bon début", "Bien vu").
-4. FORMAT VISUEL :
-   - Utilise du **gras** pour les mots-clés importants.
-   - Utilise des listes à puces pour les étapes.
-   - Utilise des emojis pour repérer les consignes (📍, 📝, ⚠️).
+OBJECTIF :
+- Faire réaliser à l'élève une tâche administrative liée au dossier choisi.
+- L’aider à produire un document métier (mail, note, tableau de synthèse, compte rendu, etc.).
 
-Ne fais jamais de gros pavé de texte compact. Aère ta réponse.
+PRÉSENTATION :
+- Contexte en 3 à 4 puces maximum (phrases courtes).
+- Consignes en une phrase courte + éventuellement une micro-liste d’étapes.
+- Pas de bloc de texte compact de plus de 7 lignes.
+- Utilise des listes à puces chaque fois que cela facilite la lecture.
+
+TABLEAUX :
+- Les tableaux PGI sont des données brutes.
+- Si tu demandes de « faire un tableau », il doit être :
+  - un tableau de synthèse,
+  - un tableau comparatif,
+  - ou un tableau de plan d’actions / de suivi.
+- Ne demande jamais de recopier le tableau du PGI.
 """
 
 INITIAL_MESSAGE = """
 👋 **Bienvenue dans Agence Pro'AGOrA**
 
-1. 👈 Choisis ton **Dossier** à gauche.
-2. 👀 Active le **Mode Confort** si besoin.
-3. 🚀 Clique sur **LANCER LA MISSION**.
+1. Choisis la **Partie** et le **Dossier** dans la barre de gauche.
+2. Sélectionne ton **Profil d’élève**.
+3. Clique sur **LANCER LA MISSION**.
+4. Lis le tableau (PGI) et la fiche d’aide si elle est affichée, puis réponds dans le chat.
 """
 
 if not st.session_state.messages:
@@ -624,22 +608,50 @@ ACTION ATTENDUE :
 2. Explique la mission à l'élève en 1 ou 2 phrases courtes.
 3. Donne une première consigne claire demandant une PRODUCTION (mail, tableau de synthèse/comparatif, note, compte rendu…).
 4. Si tu demandes un tableau, précise qu’il doit être différent du PGI (tableau de synthèse ou comparatif).
-Utilise le format CUA (gras, aéré, encourageant).
 """
-    msgs = [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}]
-    with st.spinner("Préparation de la mission..."):
+
+    msgs = [{"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": prompt}]
+    with st.spinner("Chargement du dossier..."):
         resp, _ = query_groq_with_rotation(msgs)
-        if resp is None: resp = "⚠️ IA indisponible."
+        if resp is None:
+            resp = "Désolé, le service d'IA n'est pas disponible pour le moment."
         st.session_state.messages.append({"role": "assistant", "content": resp})
     add_notification(f"Dossier lancé : {dossier}")
 
 def generer_bilan_ccf(student_name: str, dossier: str) -> str:
     history = [m["content"] for m in st.session_state.messages]
     full_text = "\n".join(history)
-    prompt = f"Tu es jury CCF. Fais un bilan court et bienveillant pour {student_name} sur le dossier {dossier} basé sur :\n{full_text}"
-    msgs = [{"role": "system", "content": "Jury neutre."}, {"role": "user", "content": prompt}]
+
+    prompt_bilan = f"""
+Tu es Inspecteur de l'Éducation nationale, jury CCF Bac Pro AGOrA.
+
+Élève : {student_name}
+Dossier travaillé : {dossier}
+
+TRANSCRIPTION (dialogue tuteur / élève) :
+{full_text}
+
+Produis un bilan structuré pour le professeur :
+
+1. Contexte professionnel (structure + mission).
+2. Activités réalisées par l'élève.
+3. Niveau atteint sur :
+   - Communication écrite,
+   - Usage des outils numériques (PGI / Word / Excel),
+   - Respect des procédures administratives.
+   Niveaux possibles : NOVICE / FONCTIONNEL / MAÎTRISE.
+4. Appréciation globale (2 ou 3 phrases à la 3e personne).
+
+Phrases courtes, style directement exploitable dans un dossier CCF.
+"""
+
+    msgs = [
+        {"role": "system", "content": "Tu es un Inspecteur IEN neutre et bienveillant."},
+        {"role": "user", "content": prompt_bilan},
+    ]
     bilan, _ = query_groq_with_rotation(msgs)
-    return bilan or "Erreur bilan."
+    return bilan or "Impossible de générer le bilan (problème d'IA)."
 
 # --- 12. INTERFACE GRAPHIQUE ---
 
@@ -649,33 +661,48 @@ BOT_AVATAR = LOGO_AGORA if os.path.exists(LOGO_AGORA) else "🤖"
 
 # --- SIDEBAR ---
 with st.sidebar:
-    if os.path.exists(LOGO_LYCEE): st.image(LOGO_LYCEE, width=100)
-    else: st.header("Lycée Pro")
-    
-    # [CUA PILIER 1] TOGGLE CONFORT VISUEL
-    st.markdown("### 👁️ Affichage")
-    mode_confort = st.toggle("Mode Lecture Confort (Dys/CUA)", value=False, help="Police sans serif, fond crème, contraste réduit.")
-    apply_cua_style(mode_confort) # Application immédiate du CSS
+    # DEBUG GROQ
+    try:
+        ks = get_api_keys_list()
+        st.caption(f"🔍 Debug IA : {len(ks)} clé(s) Groq détectée(s).")
+    except Exception as e:
+        st.error(f"Erreur lecture des clés Groq : {e}")
+
+    if os.path.exists(LOGO_LYCEE):
+        st.image(LOGO_LYCEE, width=100)
+    else:
+        st.header("Lycée Pro")
 
     st.markdown("---")
+
     st.markdown(f"### 🏆 {st.session_state.grade}")
     st.progress(min(st.session_state.xp / 1000, 1.0))
     st.caption(f"XP : {st.session_state.xp}")
 
-    student_name = st.text_input("Prénom", placeholder="Ex : Camille")
-    profil_eleve = st.selectbox("Profil (Différenciation)", ["Accompagnement renforcé", "Standard", "Autonome"])
+    student_name = st.text_input("Prénom de l'élève", placeholder="Ex : Camille")
+
+    profil_eleve = st.selectbox(
+        "Profil de l'élève (différenciation)",
+        ["Accompagnement renforcé", "Standard", "Autonome"]
+    )
     st.session_state.profil_eleve = profil_eleve
 
     st.subheader("📂 Sommaire (manuel Foucher)")
-    st.session_state.theme = st.selectbox("Partie", list(DB_OFFICIELLE.keys()))
-    st.session_state.dossier = st.selectbox("Dossier", list(DB_OFFICIELLE[st.session_state.theme].keys()))
+    st.session_state.theme = st.selectbox(
+        "Partie du manuel",
+        list(DB_OFFICIELLE.keys())
+    )
+    st.session_state.dossier = st.selectbox(
+        "Dossier",
+        list(DB_OFFICIELLE[st.session_state.theme].keys())
+    )
 
-    if st.button("🚀 LANCER LA MISSION", type="primary", use_container_width=True):
+    if st.button("LANCER LA MISSION", type="primary", use_container_width=True):
         if student_name:
             lancer_mission(student_name, profil_eleve)
             st.rerun()
         else:
-            st.warning("Saisis ton prénom.")
+            st.warning("Merci de saisir le prénom de l'élève.")
 
     if st.button("✅ Étape validée", use_container_width=True):
         update_xp(10)
@@ -683,38 +710,51 @@ with st.sidebar:
 
     st.markdown("---")
     st.markdown("### 📤 Rendre un travail")
-    
-    # [CUA PILIER 2] MODÈLES TÉLÉCHARGEABLES (SCAFFOLDING)
-    with st.expander("🛠️ Boîte à outils (Modèles)"):
-        st.caption("Besoin d'aide pour démarrer ?")
-        choix_modele = st.selectbox("Choisir un modèle", list(TEMPLATES_CUA.keys()))
+
+    uploaded_work = st.file_uploader(
+        "Fichier élève (Word / Excel / CSV)",
+        type=['docx', 'xlsx', 'xls', 'csv']
+    )
+
+    if uploaded_work and student_name:
+        if st.button("Envoyer le travail", use_container_width=True):
+            ext = os.path.splitext(uploaded_work.name)[1].lower()
+            if ext == ".docx":
+                txt = extract_text_from_docx(uploaded_work)
+            else:
+                txt = extract_text_from_table_file(uploaded_work)
+
+            st.session_state.messages.append({
+                "role": "user",
+                "content": f"PROPOSITION DE L'ÉLÈVE (extrait du fichier {uploaded_work.name}) :\n\n{txt}"
+            })
+            update_xp(20)
+            st.rerun()
+    elif uploaded_work and not student_name:
+        st.info("Renseigner le prénom avant d'envoyer un travail.")
+
+    st.markdown("---")
+    if st.button("📝 Générer Bilan CCF", use_container_width=True):
+        if student_name and len(st.session_state.messages) > 2:
+            with st.spinner("Rédaction du bilan officiel..."):
+                bilan = generer_bilan_ccf(student_name, st.session_state.dossier)
+                st.session_state.bilan_ready = bilan
+            st.rerun()
+        else:
+            st.warning("Il faut d'abord avoir travaillé avec l'élève (échanges dans le chat).")
+
+    if st.session_state.bilan_ready:
         st.download_button(
-            label=f"📥 Télécharger '{choix_modele}'",
-            data=TEMPLATES_CUA[choix_modele],
-            file_name=f"Modele_{choix_modele.replace(' ', '_')}.txt",
+            label="📥 Télécharger Fiche Bilan (txt)",
+            data=st.session_state.bilan_ready,
+            file_name=f"Bilan_CCF_{student_name}.txt",
             mime="text/plain",
             use_container_width=True
         )
 
-    uploaded_work = st.file_uploader("Fichier élève", type=['docx', 'xlsx', 'xls', 'csv'])
-    if uploaded_work and student_name:
-        if st.button("Envoyer", use_container_width=True):
-            txt = extract_text_from_docx(uploaded_work) if uploaded_work.name.endswith(".docx") else extract_text_from_table_file(uploaded_work)
-            st.session_state.messages.append({"role": "user", "content": f"FICHIER ÉLÈVE :\n{txt}"})
-            update_xp(20)
-            st.rerun()
-
     st.markdown("---")
-    if st.button("📝 Bilan CCF", use_container_width=True):
-        if student_name and len(st.session_state.messages) > 2:
-            with st.spinner("Rédaction..."):
-                st.session_state.bilan_ready = generer_bilan_ccf(student_name, st.session_state.dossier)
-            st.rerun()
-    
-    if st.session_state.bilan_ready:
-        st.download_button("📥 Télécharger Bilan", st.session_state.bilan_ready, f"Bilan_CCF_{student_name}.txt")
+    st.markdown("### 💾 Sauvegarde de la session")
 
-    # Sauvegarde CSV
     csv_data = b""
     btn_state = True
     if len(st.session_state.messages) > 0:
@@ -722,19 +762,36 @@ with st.sidebar:
         csv_data = chat_df.to_csv(index=False).encode("utf-8")
         btn_state = False
 
-    st.download_button("💾 Sauvegarde CSV", csv_data, "agora_session.csv", "text/csv", disabled=btn_state)
+    st.download_button(
+        "💾 Télécharger la sauvegarde (CSV)",
+        csv_data,
+        "agora_session.csv",
+        "text/csv",
+        disabled=btn_state,
+        use_container_width=True,
+    )
 
-    restore_file = st.file_uploader("♻️ Recharger CSV", type=["csv"])
-    if restore_file:
+    restore_file = st.file_uploader(
+        "♻️ Recharger une sauvegarde (CSV)",
+        type=["csv"],
+        help="Permet à un élève de renvoyer son fichier de sauvegarde pour reprendre la séance."
+    )
+    if restore_file is not None:
         try:
-            df = pd.read_csv(restore_file)
-            st.session_state.messages = df[["role", "content"]].to_dict(orient="records")
-            st.rerun()
-        except: pass
+            df_restore = pd.read_csv(restore_file)
+            if {"role", "content"}.issubset(df_restore.columns):
+                st.session_state.messages = df_restore[["role", "content"]].to_dict(orient="records")
+                st.success("Conversation rechargée depuis le CSV.")
+                st.rerun()
+            else:
+                st.warning("Le CSV doit contenir les colonnes 'role' et 'content'.")
+        except Exception as e:
+            st.error(f"Impossible d'importer le fichier : {e}")
 
-    if st.button("🗑️ Reset", use_container_width=True):
+    if st.button("🗑️ Reset complet", use_container_width=True):
         st.session_state.messages = [{"role": "assistant", "content": INITIAL_MESSAGE}]
         st.session_state.pgi_data = None
+        st.session_state.bilan_ready = None
         st.rerun()
 
 # --- HEADER PRINCIPAL ---
@@ -760,28 +817,23 @@ with c1:
 
 with c2:
     with st.popover("ℹ️ Aide Métier"):
-        st.info("Manuel, cours, service-public.fr")
+        st.info("Appuie-toi sur ton manuel, tes cours et les sites officiels (service-public.fr, ameli.fr...).")
 
-# [CUA PILIER 3] GLOSSAIRE INTÉGRÉ
 with c3:
-    with st.popover("📖 Vocabulaire"):
-        search_term = st.text_input("Chercher définition", placeholder="Ex: PGI")
-        if search_term:
-            found = {k: v for k, v in GLOSSAIRE.items() if search_term.lower() in k.lower()}
-            if found:
-                for k, v in found.items():
-                    st.markdown(f"**{k}** : {v}")
-            else:
-                st.warning("Pas trouvé.")
-        else:
-            st.caption("Tape un mot ci-dessus.")
+    with st.popover("❓ Aide Outil"):
+        st.link_button(
+            "Accès ENT",
+            "https://cas.ent.auvergnerhonealpes.fr/login?service=https%3A%2F%2Fglieres.ent.auvergnerhonealpes.fr%2Fsg.do%3FPROC%3DPAGE_ACCUEIL",
+        )
 
 with c4:
-    st.button(f"👤 {student_name}" if student_name else "👤 Invité", disabled=True)
+    user_label = f"👤 {student_name}" if student_name else "👤 Invité"
+    st.button(user_label, disabled=True, use_container_width=True)
 
 st.markdown("<hr style='margin: 0 0 10px 0;'>", unsafe_allow_html=True)
 
 # --- FICHE D'AIDE ---
+
 dossier_courant = st.session_state.dossier
 fiche_aide = AIDES_DOSSIERS.get(dossier_courant)
 
@@ -797,54 +849,85 @@ if fiche_aide:
 st.markdown("<br>", unsafe_allow_html=True)
 
 # --- AFFICHAGE PGI ---
+
 if st.session_state.pgi_data is not None:
-    st.markdown(f'<div class="pgi-title">📁 Données PGI – {st.session_state.dossier}</div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="pgi-title">📁 Données métier fictives (PGI) – {st.session_state.dossier}</div>',
+        unsafe_allow_html=True,
+    )
     with st.container():
         st.markdown('<div class="pgi-container">', unsafe_allow_html=True)
         st.dataframe(st.session_state.pgi_data, use_container_width=True, hide_index=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
 # --- CHAT ---
+
 for i, msg in enumerate(st.session_state.messages):
     avatar = BOT_AVATAR if msg["role"] == "assistant" else "🧑‍🎓"
     with st.chat_message(msg["role"], avatar=avatar):
         st.markdown(msg["content"])
         if msg["role"] == "assistant" and HAS_AUDIO:
-            if st.button("🔊", key=f"tts_{i}"):
+            if st.button("🔊 Lire", key=f"tts_{i}"):
                 try:
                     tts = gTTS(clean_text_for_audio(msg["content"]), lang="fr")
-                    buf = BytesIO(); tts.write_to_fp(buf)
+                    buf = BytesIO()
+                    tts.write_to_fp(buf)
                     st.audio(buf, format="audio/mp3", start_time=0)
-                except: st.warning("Audio HS")
+                except Exception:
+                    st.warning("Lecture audio impossible pour ce message.")
 
 st.markdown("<br><br>", unsafe_allow_html=True)
-st.markdown('<div class="fixed-footer">Agence Pro\'AGOrA - Données fictives - CUA Enabled</div>', unsafe_allow_html=True)
 
-# --- INPUT ---
-if user_input := st.chat_input("Ta réponse..."):
-    if not student_name: st.toast("Prénom requis !", icon="👤")
+st.markdown(
+    '<div class="fixed-footer">Agence Pro\'AGOrA - Données 100 % fictives (structures inspirées du manuel, sans reproduction intégrale)</div>',
+    unsafe_allow_html=True,
+)
+
+# --- INPUT & TOUR D'IA ---
+
+if user_input := st.chat_input("Ta réponse (ou le résumé de ton Word / Excel)…"):
+    if not student_name:
+        st.toast("Identifie-toi avant de répondre (prénom).", icon="👤")
     else:
         st.session_state.messages.append({"role": "user", "content": user_input})
         st.rerun()
 
 if st.session_state.messages and st.session_state.messages[-1]["role"] == "user":
     with st.chat_message("assistant", avatar=BOT_AVATAR):
-        with st.spinner("Analyse..."):
-            pgi_str = st.session_state.pgi_data.to_string() if st.session_state.pgi_data is not None else ""
-            diff = build_differentiation_instruction(st.session_state.profil_eleve)
+        with st.spinner("Analyse de ta réponse…"):
+            pgi_str = ""
+            if st.session_state.pgi_data is not None:
+                pgi_str = st.session_state.pgi_data.to_string()
+
+            dernier_texte_eleve = st.session_state.messages[-1]["content"]
+            diff_instr = build_differentiation_instruction(st.session_state.profil_eleve)
+
             prompt_tour = f"""
-{diff}
-DOSSIER: {st.session_state.dossier}
-PGI: {pgi_str}
-RÉPONSE ÉLÈVE: "{st.session_state.messages[-1]["content"]}"
-CONSIGNE:
-1. Vérifie l'utilisation des données PGI.
-2. Valide ou corrige avec bienveillance.
-3. Prochaine étape (production).
-FORMAT: CUA (Gras, Listes, Encouragements).
+{diff_instr}
+
+DOSSIER : {st.session_state.dossier}
+PARTIE : {st.session_state.theme}
+
+DONNÉES PGI :
+{pgi_str}
+
+RÉPONSE DE L'ÉLÈVE :
+\"\"\"{dernier_texte_eleve}\"\"\"
+
+CONSigne :
+1. Vérifie si l'élève exploite vraiment les données PGI ou le contexte du dossier.
+2. Si c'est pertinent, valide un point précis, explique pourquoi c'est bien, puis propose la prochaine étape.
+3. Si c'est incomplet ou hors sujet, explique ce qui manque en phrases courtes et donne une consigne guidée.
+4. Si tu proposes un tableau, rappelle clairement qu'il s'agit d'un tableau de synthèse/comparatif différent du PGI.
+5. Réponds avec des blocs courts et/ou listes à puces (pas de gros pavé).
 """
-            msgs = [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt_tour}]
+
+            msgs = [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": prompt_tour},
+            ]
             resp, _ = query_groq_with_rotation(msgs)
-            if resp is None: resp = "⚠️ Erreur IA. Réessaie."
+            if resp is None:
+                resp = "Je n'arrive pas à analyser ta réponse pour le moment. Préviens ton professeur."
             st.markdown(resp)
-            st.session_state.messages.append({"role": "assistant", "content": resp})
+            st.session_state.messages.append({"role": "assist
