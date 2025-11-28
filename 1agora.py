@@ -930,4 +930,4 @@ CONSigne :
             if resp is None:
                 resp = "Je n'arrive pas à analyser ta réponse pour le moment. Préviens ton professeur."
             st.markdown(resp)
-            st.session_state.messages.append({"role": "assist
+            st.session_state.messages.append({"role": "assistant", "content": resp})
