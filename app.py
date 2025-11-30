@@ -237,7 +237,7 @@ CONSIGNES PÉDAGOGIQUES (EXPLICITATION) :
 INITIAL_MESSAGE = """
 👋 **Bonjour.**
 
-Je suis ton Superviseur Virtuel OECAM. Nous allons faire le point sur ton stage.
+Je suis ton Superviseur Virtuel. Nous allons faire le point sur ton stage.
 
 Raconte-moi une activité importante que tu as réalisée. Essaie d'être précis sur **comment** tu as fait.
 """
